@@ -1,0 +1,25 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LexFlow{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
+</head>
+<body class="bg-light">
+  <a href="#main" class="visually-hidden-focusable">Skip to content</a>
+  <nav class="navbar navbar-dark bg-dark" aria-label="Main navigation">
+    <div class="container d-flex flex-wrap gap-3">
+      <a class="navbar-brand" href="{% url 'cases:index' %}">LexFlow</a>
+      {% if user.is_authenticated %}
+        <span class="text-white">{{ user.full_name }} · {{ user.role }}</span>
+        <form method="post" action="{% url 'accounts:logout' %}">
+          {% csrf_token %}<button class="btn btn-outline-light" type="submit">Sign out</button>
+        </form>
+      {% endif %}
+    </div>
+  </nav>
+  <main id="main" class="container py-4">{% block content %}{% endblock %}</main>
+</body>
+</html>

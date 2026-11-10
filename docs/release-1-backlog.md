@@ -1,6 +1,6 @@
 # LexFlow release 1: requirements and prioritized backlog
 
-Baseline: 2026-11-09. Status: ready for team planning; implementation not started in this repository.
+Baseline: 2026-11-09. Updated: 2026-11-10. Status: architecture and project foundation implemented; full release workflows remain incomplete. See [architecture](architecture.md) and [current story status](development-record.md#story-tracking).
 
 ## Purpose and scope
 
@@ -61,7 +61,7 @@ Lengths are maximum characters unless noted; IDs and timestamps are generated, n
 
 ## Ordered backlog
 
-Priority **P0** establishes security and the case/client workflow; **P1** completes daily work; **P2** completes release evidence. All are release blockers. Build in listed dependency order within each priority. Each item is a small independently verifiable story; its ID is stable across code, tests, issues, and demo evidence. All items currently have status **Planned** and owner **Unassigned**.
+Priority **P0** establishes security and the case/client workflow; **P1** completes daily work; **P2** completes release evidence. All are release blockers. Build in listed dependency order within each priority. Each item is a small independently verifiable story; its ID is stable across code, tests, issues, and demo evidence. Current partial implementation and ownership are tracked in the [development record](development-record.md#story-tracking); unlisted items remain Planned/unassigned.
 
 ### P0 — Identity, permissions, clients, and cases
 
@@ -227,7 +227,23 @@ As a reviewer, I can follow a repeatable demonstration and inspect the delivered
 
 ## Requirements traceability
 
-The table is an implementation plan, **not evidence of completion**. `I-*` names are logical components, not existing files or a selected architecture. `T-*` names reserve test groups whose cases must map to the story's individual acceptance bullets and G1–G5. Replace component labels with actual repository paths/symbols and test labels with runnable paths plus result/commit links as work lands. Demo steps are defined below. All rows are currently Planned, unassigned, with no passing test evidence.
+### Foundation evidence (2026-11-10; partial stories)
+
+The local `sh scripts/check.sh` run passed 18 Django tests and one Chromium workflow, with no skipped tests, against Docker PostgreSQL 16.13 / Python 3.12.14. These are scaffold checks, not a full release acceptance pass. Changes are in the working tree with no commit/PR yet. No hosted CI run, full D1–D10 rehearsal, or full story completion is claimed.
+
+| Requirement | Actual implementation | Actual tests / evidence | Demonstrated subset and gaps |
+| --- | --- | --- | --- |
+| AUTH-01/02 | [User](../accounts/models.py), [form](../accounts/forms.py), [routes](../accounts/urls.py), [cache middleware](../accounts/middleware.py), [settings](../config/settings/base.py) | [AuthenticationTests](../tests/test_foundation.py), [Chromium workflow](../tests/browser/test_workflow.py) | D2/D10 subset: email login, invalid credentials, inactive rejection, CSRF, logout/replay; throttling/idle/absolute policies and audit remain |
+| USER-01 | [Custom user/manager](../accounts/models.py), [migration](../accounts/migrations/0001_initial.py); Django `createsuperuser` | `AccountTests` in [foundation tests](../tests/test_foundation.py) | D1 subset: bootstrap role, password hash, normalized unique email; account-management UI/services remain |
+| ACCESS-01, CLIENT-02 | [Filtered case/client policies](../cases/policies.py) | `PermissionTests` in [foundation tests](../tests/test_foundation.py) | D4 subset: role/membership scope, shared/unlinked clients, removed membership; client UI and complete action matrix remain |
+| CASE-02 | [Read views](../cases/views.py), [templates](../templates/cases/index.html) | `PermissionTests`, [browser workflow](../tests/browser/test_workflow.py) | D4 subset: assigned list/detail, guessed ID denial; search, paging, edit/conflicts remain |
+| DOC-01/02/03 (storage foundation only) | [Private storage](../documents/storage.py), [metadata schema](../documents/models.py) | `DemoCommandTests.test_private_files_have_no_url_or_public_route` in [tests](../tests/test_foundation.py) | Private fixture bytes and no public file route verified; upload, authorized download, archive workflows are not implemented |
+| DEL-01 | [Shared checks](../scripts/check.sh), [GitHub workflow](../.github/workflows/ci.yml), [Jenkinsfile](../Jenkinsfile) | Local run: format/lint/system/migration checks, 18 Django + 1 Chromium passed; `SettingsTests` includes configured deployment checks | D9 subset: real commands and local results; hosted CI and full feature/security suite remain |
+| DEL-02 | [Setup](../README.md), [architecture](architecture.md), [review/DoD](../CONTRIBUTING.md), [seed command](../accounts/management/commands/seed_demo.py), [dependency lock](../uv.lock) | `DemoCommandTests`, `DemoRollbackTests`, `SettingsTests`; fresh local Docker migration + seed | D9 subset: setup/migrations/fixtures, rerun safety and rollback; independent teammate reproduction and backup/restore remain |
+
+### Full release targets
+
+The table below remains the full-release plan, **not evidence of completion**. `I-*` names identify logical components. `T-*` names reserve complete test groups whose cases must map to the story's individual acceptance bullets and G1–G5. Foundation evidence above links actual partial implementations; replace target labels with further actual paths and result/commit links as each story is completed. Demo steps are defined below. None of these release-level test groups is claimed fully passing yet.
 
 | Requirement | Abstract/request coverage | Planned implementation | Planned test group | Demo |
 | --- | --- | --- | --- | --- |

@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block content %}
+<a href="{% url 'cases:index' %}">Back to cases</a>
+<h1 class="h3 mt-3">{{ case.title }}</h1>
+<dl><dt>Case number</dt><dd>{{ case.number }}</dd><dt>Status</dt><dd>{{ case.status }}</dd><dt>Summary</dt><dd>{{ case.summary|default:'No summary recorded.' }}</dd></dl>
+{% endblock %}

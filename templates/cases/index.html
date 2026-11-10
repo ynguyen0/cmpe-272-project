@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="h3">{% if user.is_administrator %}Firm cases{% else %}My cases{% endif %}</h1>
+<p class="text-secondary">Project foundation: assigned case access is available. Additional workflows are tracked in the release backlog.</p>
+<div class="table-responsive">
+  <table class="table table-striped bg-white">
+    <caption>Cases you are authorized to view</caption>
+    <thead><tr><th scope="col">Number</th><th scope="col">Title</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+    {% for case in cases %}
+      <tr><td><a href="{% url 'cases:detail' case.pk %}">{{ case.number }}</a></td><td>{{ case.title }}</td><td>{{ case.status }}</td></tr>
+    {% empty %}<tr><td colspan="3">No cases are assigned to you.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
