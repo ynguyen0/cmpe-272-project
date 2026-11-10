@@ -6,6 +6,8 @@ There is no separate SPA, REST API, or Node build pipeline. Split those boundari
 only if requirements demand it. Python 3.12 and Django 5.2 LTS are pinned with the
 resolved dependency set in `uv.lock`; PostgreSQL 16.13 is the shared development/CI version.
 Bootstrap 5.3.8 CSS is vendored locally with its license.
+The [database design and ER diagram](database-design.md) supersede the initial schema
+details below with explicit links, responsibility fields, revisions and aware due times.
 
 ## Modules and ownership boundaries
 
@@ -15,8 +17,8 @@ Bootstrap 5.3.8 CSS is vendored locally with its license.
 | `clients` | Client identity/contact information and record creator |
 | `cases` | Case records, client links, team memberships, read selectors, initial list/detail pages |
 | `documents` | Private storage adapter, document metadata and archive fields |
-| `work` | Tasks with assignees/due dates; deadlines with date/type/status |
-| `audit` | Actor/action/resource/result/correlation/timestamp event schema |
+| `work` | Tasks with assignees/priority/due times; deadlines with responsibility/completion details |
+| `audit` | Append-only AuditEvent with actor/action/target/result/request/time and limited changed-field names |
 | `config` | URLs, middleware wiring, environment-specific settings, WSGI/ASGI entry points |
 
 The custom user is installed before the first migration, avoiding a later identity
@@ -50,12 +52,17 @@ with server-side role/action checks, field validation, transactions, row locking
 optimistic concurrency checks, and audit writes. Templates never decide permissions.
 This is a prescribed extension pattern, not a claim those mutation services already exist.
 
-Relationships: Client ↔ Case is many-to-many; User ↔ Case is many-to-many; a Document,
+Relationships: Client ↔ Case uses explicit CaseClient links; User ↔ Case uses explicit
+CaseMembership rows with active flags and responsibilities. Case read policies require
+active membership; authorized archived reads preserve access to history. A Document,
 Task, or Deadline belongs to exactly one Case. Tasks reference one assignee. Creator,
 uploader, assignee, and audit-actor foreign keys protect referenced users from deletion.
 Case-linked records use protected foreign keys. Lifecycle rules (minimum attorney,
 closure blockers, archive behavior, and no hard-delete interfaces) still require the
-backlog's service implementation; ordinary ORM access is trusted internal code.
+backlog's service implementation; ordinary ORM access is trusted internal code. Composite
+PostgreSQL FKs prevent responsible attorneys/task assignees/deadline owners from referring
+to another case's team. An atomic revision helper detects stale updates; all future
+feature mutations must use that helper and authorized transactional services.
 
 Private document bytes live outside public/static directories with generated keys.
 The storage adapter refuses `.url`, and there is no file-serving route. Later DOC-02
@@ -85,7 +92,8 @@ This establishment step exposes only login, POST logout, case list, and read-onl
 detail. It initializes all six domains and seeds their relationships. It does **not**
 complete authentication throttling/absolute expiry, user administration safeguards,
 write workflows/validation, file upload/download/archive UI, task/deadline transitions,
-dashboard, audit capture/review/tamper protection, or release delivery. The backlog
+dashboard, audit capture/review, or release delivery. PostgreSQL now rejects audit row
+updates/deletes, but event collection and the review screen still need implementation. The backlog
 criteria, including JSON-style failure codes, will be adapted to server-rendered forms
 in a documented follow-up; currently anonymous browser requests redirect to sign-in,
 invalid login redisplays a form, and missing CSRF is 403. Do not mark full stories done.

@@ -16,7 +16,7 @@ def cases_visible_to(user):
         return Case.objects.none()
     if user.is_administrator:
         return Case.objects.all()
-    return Case.objects.filter(members=user).distinct()
+    return Case.objects.filter(memberships__user=user, memberships__is_active=True).distinct()
 
 
 def clients_visible_to(user):
@@ -25,5 +25,6 @@ def clients_visible_to(user):
     if user.is_administrator:
         return Client.objects.all()
     return Client.objects.filter(
-        Q(cases__in=cases_visible_to(user)) | Q(cases__isnull=True, created_by=user)
+        Q(case_links__case__in=cases_visible_to(user), case_links__is_active=True)
+        | Q(case_links__isnull=True, created_by=user)
     ).distinct()

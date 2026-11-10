@@ -2,6 +2,10 @@
 
 Baseline: 2026-11-09. Updated: 2026-11-10. Status: architecture and project foundation implemented; full release workflows remain incomplete. See [architecture](architecture.md) and [current story status](development-record.md#story-tracking).
 
+The [database design](database-design.md) adds the implemented relational schema and
+supersedes the original date-only due fields and blanket archived-download denial.
+These changes follow the database-design request and are recorded as DEC-12–14.
+
 ## Purpose and scope
 
 This backlog translates [the project abstract](lexflow_abstract.pdf), sections I–III, and the requested first-release feature list into testable work. Release 1 demonstrates secure collaboration around clients and cases, documents, tasks, deadlines, personal work summaries, and accountability. All stories below are required for release 1. Priority determines build order, not optional scope.
@@ -36,28 +40,28 @@ These rules are acceptance criteria for **every** story, including the negative 
 - **G1 — Authorization:** enforce permissions on the server for list, search, detail, download, and mutation requests; hiding a button is insufficient. Missing/expired authentication returns 401. A forbidden role action returns 403; an inaccessible or nonexistent record ID returns the same 404 response. Failures expose no record contents, counts, filenames, or storage URLs and make no business-data change. Search, summaries, and related records use the same filters.
 - **G2 — Validation:** trim surrounding whitespace; reject blank required fields, excessive lengths, unknown enums/fields, invalid identifiers, and invalid relationships. Invalid requests return field errors (400 or 422), preserve entered nonsecret values, and make no partial change. Treat free text as text, never executable HTML. Recheck permissions and referenced records at write time.
 - **G3 — Integrity:** generate immutable IDs, creator, and creation/update timestamps server-side. Persist successful changes across refresh and restart. Use transactions for multi-record changes. Reject stale edits with 409 and offer reload rather than silently overwriting changes. Do not expose password fields in responses.
-- **G4 — State:** closed cases and their documents/tasks/deadlines are readable to authorized users but immutable except for reopening by an administrator or assigned attorney. Client records can still be corrected. There is no hard-delete endpoint for clients, cases, documents, users, tasks, deadlines, or audit entries in release 1. Archive applies only to documents.
+- **G4 — State:** closed cases and their documents/tasks/deadlines are readable to authorized users but immutable except for reopening by an administrator or assigned attorney. Client records can still be corrected. There is no hard-delete endpoint for clients, cases, documents, users, tasks, deadlines, or audit entries in release 1. Routine removal uses archive or deactivation as defined in the database design; authorized historical reads remain available. Archiving a closed case is a permitted administrative lifecycle action, preserving its contents.
 - **G5 — Accountability:** record successful reads/searches/downloads and mutations, authentication events, and authorization denials under LOG-01/02. A mutation and its audit event succeed together or neither commits. Never log passwords, session tokens, document contents, or client contact/notes text.
 
 ## Data and state decisions
 
-Lengths are maximum characters unless noted; IDs and timestamps are generated, not entered. Optional fields may be blank. Dates must be real ISO `YYYY-MM-DD` calendar dates. The firm's display timezone is `America/Los_Angeles`; store event timestamps in UTC. Date-only deadlines and task due dates retain their calendar date and do not shift with browser timezone.
+Lengths are maximum characters unless noted; IDs and timestamps are generated, not entered. Optional fields may be blank. Case opened/closed dates are real ISO `YYYY-MM-DD` business dates. Tasks and deadlines require a local date and time, stored as UTC-aware `due_at` and displayed in the configured firm timezone (`America/Los_Angeles`). Reject ambiguous/nonexistent DST input. Legacy date-only due values migrate to 17:00 firm time as a documented conversion assumption.
 
 | Record | Required user-entered fields | Optional fields and constraints |
 | --- | --- | --- |
 | User | Full name (1–100); unique email (≤254, valid email syntax, case-insensitive uniqueness); role | Password on creation: 12–128 characters; active flag defaults true; no account deletion or email change in release 1 |
-| Client | Display/legal name (1–150); type: `Individual` or `Organization` | Email (valid syntax, ≤254), phone (≤30; digits, spaces, `+()-`), address (≤500), notes (≤2,000); duplicate names allowed and distinguished by ID |
-| Case | Title (1–200); at least one accessible client; at least one active attorney | Summary (≤2,000); system-generated unique case number; default status `Open` |
+| Client | Display/legal name (1–150); type: `Individual` or `Organization` | Email (valid syntax, ≤254), phone (≤30; digits, spaces, `+()-`), address (≤500), notes (≤2,000); status `Active`/`Archived`; duplicate names allowed and distinguished by ID |
+| Case | Title (1–200); case type; at least one accessible client; responsible active attorney and team membership; opened date | Summary (≤2,000); unique internal case reference distinct from optional nonunique court docket number (≤100); default status `Open`; closed date required on closure. CaseClient records relationship; CaseMembership records responsibility/active status. See database design for enums. |
 | Document | Accessible case; file; title (1–200); category | Categories: `Pleading`, `Evidence`, `Correspondence`, `Contract`, `Other`; state `Active` or `Archived`; preserve uploader, original filename, media type, size, and upload time |
-| Task | Open case; title (1–200); one active assigned case member; due date | Description (≤2,000); default status `To do`; past dates allowed for recording overdue work |
-| Deadline | Open case; title (1–200); date; type | Types: `Hearing`, `Filing`, `Meeting`, `Other`; notes (≤2,000); default status `Pending`; past dates allowed |
+| Task | Open case; title (1–200); one active assigned case member; due date/time | Description (≤2,000); priority `Low`/`Normal`/`High` (default Normal); default status `To do`; past instants allowed for recording overdue work |
+| Deadline | Open case; title (1–200); due date/time; type; responsible active case member | Types: `Hearing`, `Filing`, `Meeting`, `Other`; notes (≤2,000); default status `Pending`; past instants allowed; completion/cancellation requires actor, timestamp and notes (1–500) |
 
 - **Case transitions:** `Open → On hold → Open`; either `Open` or `On hold → Closed`; `Closed → Open`. Both `Open` and `On hold` permit normal edits (the permission matrix's “open cases” includes both). Closing requires every task to be `Done` and every deadline to be `Completed` or `Cancelled`; otherwise return 409 with the accessible blockers. Reopening requires at least one active assigned attorney; an administrator may supply one as part of the same reopen transaction if all previous attorneys became inactive or changed role while the case was closed. No bulk override.
 - **Tasks:** `To do → In progress → Done`, `To do → Done`, and `Done → To do` (reopen); `In progress → To do` also allowed. Set completion time on `Done`; clear it on reopen. Reject all other transitions and unknown statuses.
-- **Deadlines:** `Pending → Completed` or `Cancelled`; `Completed/Cancelled → Pending` on an editable case. A pending item dated before today is overdue; today through today + 7 calendar days inclusive is upcoming. Completed/cancelled items are excluded. Tasks use the same date rules, excluding `Done`.
+- **Deadlines:** `Pending → Completed` or `Cancelled`; `Completed/Cancelled → Pending` on an editable case, clearing completion fields. A pending item with `due_at < now` is overdue; upcoming is now through the end of firm-local day +7 inclusive. Completed/cancelled items are excluded. Tasks use the same instant rules, excluding `Done`. Default work lists exclude archived items, but closure blockers still consider unfinished archived work.
 - **Assignments:** only active attorneys/staff may be team members; administrators have global access and need no membership. Retain at least one active attorney per nonclosed case. Block removal, deactivation, or role change that would leave a nonclosed case without one, or leave unfinished tasks assigned to a nonmember/inactive user. Return 409 with blockers the administrator/attorney can resolve first. Done tasks retain historical attribution. Reassignment must target an active member of the same case.
 - **Files:** accept `.pdf`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg` only, matching server-validated content type/signature (UTF-8 text for TXT; valid DOCX container for DOCX). Reject empty, corrupt, encrypted, disguised, or unsupported files, path-bearing filenames, and files larger than 10 MiB (10,485,760 bytes). Use generated private storage keys; original names are display metadata. Downloads require a fresh authorization check and attachment disposition. No public file URLs or inline preview. Duplicate filenames are separate document IDs; no overwrites or versioning.
-- **Archive:** one-way `Active → Archived`, with actor/time and required reason (1–500). Keep the file and metadata; hide from default lists and all download paths immediately. Authorized case members may explicitly include archived metadata; archived bytes remain unavailable even to administrators in release 1. Repeated archive requests return 409. Restoration, retention automation, and physical purge are deferred.
+- **Archive:** documents use one-way `Active → Archived`, with actor/time and required reason (1–500). Keep bytes and metadata; hide from default work lists. Authorized users may explicitly include archived records and request historical downloads through the same fresh case authorization check; unassigned/inactive users remain denied. Other entities use the archive/deactivate fields specified in the database design. Repeated archive requests return 409. Restoration, retention automation, and physical purge are deferred.
 
 ## Ordered backlog
 
@@ -149,17 +153,17 @@ As a case team member, I can add a categorized file to an editable case.
 As a case team member, I can find and retrieve the correct active document.
 - List active case documents, filter by category, and download identical bytes with the original display filename. Team members may update title/category on an editable case, preserving file/creator metadata.
 - Reject invalid category/title/filter and stale edits; unknown document IDs return 404. Changing bytes requires a new upload, never an update to an existing file.
-- Deny guessed storage URLs and unassigned downloads/updates. Archived files cannot be downloaded, and closed cases allow authorized downloads but reject metadata changes.
+- Deny guessed storage URLs and unassigned downloads/updates. Explicit historical downloads of archived files require current case access; closed cases allow authorized downloads but reject metadata changes.
 
 #### DOC-03 — Archive documents (depends on DOC-02)
 As an assigned attorney, I can retire a document without deleting its history.
 - Archive with a reason, actor, and timestamp; default lists hide it. An explicit archived filter shows retained metadata and reason to authorized case members.
 - Reject missing/overlong reason, repeated archive, and closed-case archive. Retain original bytes privately; no restore/delete operation exists.
-- Staff/unassigned users cannot archive; all roles are denied archived downloads, including via a previously copied URL.
+- Staff/unassigned users cannot archive; authorized case users can request historical archived downloads, and copied URLs never bypass authorization.
 
 #### TASK-01 — Create and assign tasks (depends on CASE-03)
 As a case team member, I can assign work with a due date.
-- Create a `To do` task with title, description, due date, and one active member of the same case. The assignee sees it in their work list after refresh.
+- Create a `To do` task with title, description, priority, due date/time, and one active member of the same case. The assignee sees it in their work list after refresh.
 - Reject missing title/date/assignee, impossible dates, inactive/nonmember assignees, and closed cases; past dates are accepted and shown as overdue.
 - Unassigned users cannot create tasks or use the assignee selector to enumerate a different case's team.
 
@@ -177,7 +181,7 @@ As a task assignee, I can report progress and finish my work.
 
 #### DATE-01 — Record and edit deadlines (depends on CASE-02)
 As a case team member, I can record important dates.
-- Create a pending deadline with title, type, date, and optional notes; edit those fields on an editable case. Permit multiple deadlines on one date and historical dates.
+- Create a pending deadline with title, type, due date/time, responsible case member, and optional notes; edit those fields on an editable case. Permit multiple deadlines at one instant and historical dates. Resolution/cancellation records actor, timestamp and nonblank completion notes.
 - Reject missing/impossible dates, blank title, invalid type, excessive notes, stale edits, and changing the deadline's case ID.
 - Unassigned users cannot read/create/edit deadlines; closed-case edits fail.
 
@@ -185,7 +189,7 @@ As a case team member, I can record important dates.
 As a case team member, I can see outstanding deadlines and mark them resolved.
 - Show case deadlines sorted by date then ID, with overdue/upcoming labels using the shared inclusive date rules. Apply allowed completion/cancellation/reopen transitions.
 - Reject invalid status transitions and closed-case updates. Completed/cancelled items remain in history but leave pending date summaries; an empty list has a clear empty state.
-- Unassigned users cannot read or resolve deadlines. Verify today, yesterday, today + 7, and today + 8 using a fixed test clock, including a timezone/date boundary.
+- Unassigned users cannot read or resolve deadlines. Verify immediately before/at/after now, end of firm day +7, day +8, and DST/UTC boundaries using a fixed test clock.
 
 #### DASH-01 — Summarize personal work (depends on TASK-03, DATE-02, DOC-02)
 As a signed-in user, I can see what needs my attention.
@@ -196,7 +200,7 @@ As a signed-in user, I can see what needs my attention.
 #### LOG-01 — Record access and changes (foundation alongside ACCESS-01)
 As an administrator, I can rely on a history of relevant access and changes.
 - Append an event with UTC time, actor ID (or unauthenticated marker), action, resource type/ID when known, result, and request correlation ID for login success/failure/logout, expiry/deactivation revocation, user/role changes, reads/searches, uploads/downloads, archive, creates/edits, assignment changes, and status changes. Record failed validation as a failure event without submitted sensitive values.
-- Mutation events contain changed field names and non-sensitive status/assignment IDs, not client text or file contents. Search/read events omit search text and response contents. No passwords/tokens are recorded; invalid input cannot inject log structure.
+- Mutation events contain only allowlisted changed field names (max 20); target/actor IDs live in dedicated columns. No submitted field values, client text, file contents, passwords or tokens are recorded. Search/read events omit search text and response contents; invalid input cannot inject log structure.
 - Clients cannot submit actor/time or update/delete events; nonadministrators cannot fetch logs. Failed authorization is logged without disclosing inaccessible record data to the caller.
 
 #### LOG-02 — Review activity (depends on LOG-01)
@@ -243,6 +247,11 @@ The local `sh scripts/check.sh` run passed 18 Django tests and one Chromium work
 
 ### Full release targets
 
+The [database-design traceability](development-record.md#database-design-traceability)
+adds current schema, constraint, revision, archive and migration evidence, with 33
+Django/schema/migration tests plus one Chromium test passing locally on 2026-11-10.
+It does not close the remaining feature acceptance criteria.
+
 The table below remains the full-release plan, **not evidence of completion**. `I-*` names identify logical components. `T-*` names reserve complete test groups whose cases must map to the story's individual acceptance bullets and G1–G5. Foundation evidence above links actual partial implementations; replace target labels with further actual paths and result/commit links as each story is completed. Demo steps are defined below. None of these release-level test groups is claimed fully passing yet.
 
 | Requirement | Abstract/request coverage | Planned implementation | Planned test group | Demo |
@@ -261,7 +270,7 @@ The table below remains the full-release plan, **not evidence of completion**. `
 | CASE-04 | Case progress | I-Cases: status transitions | T-CASE-04 close blockers, read-only, reopen | D7 |
 | DOC-01 | Upload/organize documents | I-Documents: validation/private upload | T-DOC-01 each type, disguise/size, rollback | D5 |
 | DOC-02 | Documents/download (request) | I-Documents: list/edit/authorized download | T-DOC-02 byte equality, filters, private routes | D5 |
-| DOC-03 | Archive (request); accountable deletion alternative | I-Documents: archive state | T-DOC-03 retention, repeat, download denial | D5 |
+| DOC-03 | Archive (request); accountable deletion alternative | I-Documents: archive state | T-DOC-03 retention, repeat, authorized retrieval/unauthorized denial | D5 |
 | TASK-01 | Assign work | I-Tasks: create/assign | T-TASK-01 dates, active membership, scope | D6 |
 | TASK-02 | Coordinate work | I-Tasks: edit/reassign | T-TASK-02 reassignment, conflict, scope | D6 |
 | TASK-03 | Track completion (request) | I-Tasks: transitions | T-TASK-03 timestamps, staff ownership, scope | D6 |
@@ -284,7 +293,7 @@ Use a resettable seed with Admin A, Attorney A, Attorney B, Staff A, and one ina
 | D2 | Invalid/inactive login, valid login, anonymous access and guessed case URL | Generic login failure; 401/404; no confidential content |
 | D3 | Create client, reject invalid email, search and update | Saved details survive refresh; unrelated unlinked client absent |
 | D4 | Attorney creates case, links clients, assigns team, changes details | Generated case number; staff can read; unassigned attorney cannot; shared client does not reveal Beta |
-| D5 | Upload/categorize/download a valid file; reject disguised/oversize file; archive | Download byte match; no failed-upload residue; archived download denied and metadata retained |
+| D5 | Upload/categorize/download a valid file; reject disguised/oversize file; archive | Download byte match; no failed-upload residue; authorized historical retrieval, unassigned denial, retained metadata |
 | D6 | Assign/reassign a task, move through statuses; enter/resolve deadlines | Assignee work list changes; invalid date/nonmember rejected; historical records remain |
 | D7 | Show overdue/upcoming dashboard; attempt blocked closure, resolve work, close/reopen | Counts match dates/lists; blockers explained; closed edits rejected; reopen succeeds |
 | D8 | Administrator filters access/change events; staff attempts log access | Events identify actor/action/time/result without secrets; staff denied |

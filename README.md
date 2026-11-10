@@ -4,6 +4,8 @@ LexFlow is a law firm case management prototype built as one Django application:
 Django templates and Bootstrap, PostgreSQL, and private filesystem documents.
 See the [architecture](docs/architecture.md), [release backlog](docs/release-1-backlog.md),
 and [team workflow/definition of done](CONTRIBUTING.md).
+The [database design and ER diagram](docs/database-design.md) define the fields,
+protected relationships, constraints, indexes, archive rules, and migration strategy.
 
 The foundation currently provides email sign-in/sign-out, an assigned-case list/detail
 page, six domain apps with initial migrations, private storage, and fictional seeds.
@@ -48,13 +50,15 @@ For a non-demo bootstrap account, run `uv run python manage.py createsuperuser`;
 it prompts for an email, full name, and password and assigns the Administrator role.
 
 Demo records include Alpha/Beta cases with separate teams, five clients including one
-shared client and two unlinked intakes, two private text files (active/archived), four
-tasks and four deadlines at day -1, 0, +7, and +8, and a seed audit event. Only the case
+shared client and two unlinked intakes, explicit case/client and team responsibility
+links, two private text files (active/archived), four tasks and four deadlines due at
+17:00 firm time on day -1, 0, +7, and +8, and a seed audit event. Only the case
 pages are exposed yet. The other records support subsequent workflow development.
 
 `uv run python manage.py seed_demo` is repeatable: it does not duplicate fixture records,
 delete unrelated data, change existing passwords, or reset existing task/deadline dates.
-It adds the expected demo case/team/client links if missing. `DEMO-*` case numbers and
+It adds expected demo case/team/client links if missing and preserves existing inactive
+links rather than reactivating them. `DEMO-*` case numbers and
 `@example.test` fixture emails are reserved for this command; use a dedicated local
 database. To get fresh relative dates without deleting data, explicitly edit them in a
 development shell or use a new empty development database. Seeding is disabled in deployment.
@@ -73,7 +77,8 @@ sh scripts/check.sh
 ```
 
 The shared script runs Ruff format/lint checks, Django checks, migration drift checks,
-Django tests, and a real Chromium sign-in → case access/denial → sign-out workflow.
+foundation/schema tests, a real historical migration upgrade/downgrade/upgrade test,
+and a Chromium sign-in → case access/denial → sign-out workflow.
 Browser tests start their own Django server and isolated test database; no development
 server or seeded development data is required. Missing browsers fail the check rather
 than silently skipping it. Development uses Django's normal password hashers; the fast
@@ -85,6 +90,7 @@ Useful individual commands:
 uv run ruff format .
 uv run ruff check .
 uv run python manage.py test tests.test_foundation --settings=config.settings.test --noinput
+uv run python manage.py test tests.test_schema tests.test_migrations --settings=config.settings.test --noinput
 uv run python manage.py test tests.browser --settings=config.settings.test --noinput
 uv run python manage.py makemigrations
 uv run python manage.py migrate

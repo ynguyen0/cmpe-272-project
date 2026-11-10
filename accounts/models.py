@@ -3,6 +3,8 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models.functions import Lower
 
+from config.models import RevisionedModel, nonblank_check, revision_checks
+
 
 class UserManager(BaseUserManager):
     use_in_migrations = True
@@ -29,7 +31,7 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-class User(AbstractUser):
+class User(AbstractUser, RevisionedModel):
     class Role(models.TextChoices):
         ADMINISTRATOR = "Administrator"
         ATTORNEY = "Attorney"
@@ -48,6 +50,9 @@ class User(AbstractUser):
 
     class Meta:
         constraints = [
+            *revision_checks(),
+            nonblank_check("email"),
+            nonblank_check("full_name"),
             models.UniqueConstraint(Lower("email"), name="user_email_case_insensitive_unique"),
             models.CheckConstraint(
                 condition=models.Q(role__in=["Administrator", "Attorney", "Staff"]),

@@ -13,8 +13,8 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import User
-from audit.models import Event
-from cases.models import Case
+from audit.models import AuditEvent
+from cases.models import Case, CaseMembership
 from cases.policies import cases_visible_to, clients_visible_to
 from clients.models import Client
 from documents.models import Document
@@ -98,7 +98,8 @@ class PermissionTests(SeededTestCase):
         self.client.force_login(self.staff)
         url = reverse("cases:detail", args=[self.alpha.pk])
         self.assertEqual(self.client.get(url).status_code, 200)
-        self.alpha.members.remove(self.staff)
+        membership = CaseMembership.objects.get(case=self.alpha, user=self.staff)
+        membership.update_with_revision(membership.revision, is_active=False)
         self.assertEqual(self.client.get(url).status_code, 404)
         self.staff.is_active = False
         self.staff.save()
@@ -149,19 +150,17 @@ class AuthenticationTests(SeededTestCase):
 
 class DemoCommandTests(SeededTestCase):
     def test_rerun_preserves_counts_passwords_and_dates(self):
-        models = [User, Client, Case, Document, Task, Deadline, Event]
+        models = [User, Client, Case, Document, Task, Deadline, AuditEvent]
         before = [model.objects.count() for model in models]
         hashes = list(User.objects.order_by("pk").values_list("password", flat=True))
-        dates = list(Task.objects.order_by("pk").values_list("due_date", flat=True))
+        dates = list(Task.objects.order_by("pk").values_list("due_at", flat=True))
         with patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": "Another-valid-passphrase-81!"}):
             call_command("seed_demo", stdout=StringIO())
         self.assertEqual(before, [model.objects.count() for model in models])
         self.assertEqual(
             hashes, list(User.objects.order_by("pk").values_list("password", flat=True))
         )
-        self.assertEqual(
-            dates, list(Task.objects.order_by("pk").values_list("due_date", flat=True))
-        )
+        self.assertEqual(dates, list(Task.objects.order_by("pk").values_list("due_at", flat=True)))
         self.assertEqual(before, [5, 5, 2, 2, 4, 4, 1])
 
     def test_private_files_have_no_url_or_public_route(self):
@@ -249,7 +248,8 @@ class DemoRollbackTests(TestCase):
         with (
             patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": DEMO_PASSWORD}),
             patch(
-                "audit.models.Event.objects.get_or_create", side_effect=RuntimeError("DB failure")
+                "audit.models.AuditEvent.objects.get_or_create",
+                side_effect=RuntimeError("DB failure"),
             ),
             self.assertRaisesMessage(RuntimeError, "DB failure"),
         ):

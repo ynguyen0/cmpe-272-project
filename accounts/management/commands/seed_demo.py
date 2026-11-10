@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
@@ -12,8 +12,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import User
-from audit.models import Event
-from cases.models import Case
+from audit.models import AuditEvent
+from cases.models import Case, CaseClient, CaseMembership
 from clients.models import Client
 from documents.models import Document
 from work.models import Deadline, Task
@@ -83,24 +83,42 @@ class Command(BaseCommand):
             )
         alpha, _ = Case.objects.get_or_create(
             number="DEMO-ALPHA",
-            defaults={"title": "Fictional Alpha matter", "created_by": a},
+            defaults={
+                "title": "Fictional Alpha matter",
+                "created_by": a,
+                "responsible_attorney": a,
+            },
         )
         beta, _ = Case.objects.get_or_create(
             number="DEMO-BETA",
-            defaults={"title": "Fictional Beta matter", "created_by": b},
+            defaults={"title": "Fictional Beta matter", "created_by": b, "responsible_attorney": b},
         )
-        alpha.members.add(a, users["staff.a"])
-        beta.members.add(b)
-        alpha.clients.add(clients["alpha"], clients["shared"])
-        beta.clients.add(clients["beta"], clients["shared"])
+        for case, user, responsibility in [
+            (alpha, a, CaseMembership.Responsibility.LEAD),
+            (alpha, users["staff.a"], CaseMembership.Responsibility.SUPPORT),
+            (beta, b, CaseMembership.Responsibility.LEAD),
+        ]:
+            CaseMembership.objects.get_or_create(
+                case=case, user=user, defaults={"responsibility": responsibility}
+            )
+        for case, client in [
+            (alpha, clients["alpha"]),
+            (alpha, clients["shared"]),
+            (beta, clients["beta"]),
+            (beta, clients["shared"]),
+        ]:
+            CaseClient.objects.get_or_create(case=case, client=client)
         today = timezone.localdate()
         for offset in [-1, 0, 7, 8]:
+            due_at = datetime.combine(
+                today + timedelta(days=offset), time(17), tzinfo=timezone.get_default_timezone()
+            )
             Task.objects.get_or_create(
                 case=alpha,
                 title=f"Demo task day {offset:+d}",
                 defaults={
                     "assignee": users["staff.a"],
-                    "due_date": today + timedelta(days=offset),
+                    "due_at": due_at,
                     "created_by": a,
                 },
             )
@@ -108,7 +126,8 @@ class Command(BaseCommand):
                 case=alpha,
                 title=f"Demo deadline day {offset:+d}",
                 defaults={
-                    "date": today + timedelta(days=offset),
+                    "due_at": due_at,
+                    "responsible_user": a,
                     "type": Deadline.Type.FILING,
                     "created_by": a,
                 },
@@ -135,7 +154,7 @@ class Command(BaseCommand):
             doc.file.save("fictional-sample.txt", ContentFile(content), save=False)
             written_files.append((doc.file.storage, doc.file.name))
             doc.save()
-        Event.objects.get_or_create(
+        AuditEvent.objects.get_or_create(
             action="demo.seed",
             correlation_id=uuid.UUID("77894a7c-cc34-4b6c-8ca0-778eb94801a1"),
             defaults={
