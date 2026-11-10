@@ -9,3 +9,9 @@ LexFlow is a secure, web-based case management portal for law firms. It centrali
 
 ## Current Goal
 We want to produce a functional prototype that demonstrates how a centralized information system can improve efficiency, collaboration, security, and accountability in a real-world law firm setting. The design also lays groundwork for future enhancements such as client access, automated reminders, calendar integration, electronic signatures, reporting tools, and cloud deployment.
+
+## Release planning
+
+- [Release 1 backlog](release-1-backlog.md): prioritized user stories, acceptance criteria, roles, field/state/file rules, requirements traceability, and the prototype demonstration contract.
+- [Development record](development-record.md): initial decisions and the ongoing record of changes, progress, test evidence, and submission materials.
+- [Original project abstract](lexflow_abstract.pdf): project goals, milestones, and delivery requirements.
