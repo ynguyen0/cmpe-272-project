@@ -63,6 +63,13 @@ links rather than reactivating them. `DEMO-*` case numbers and
 database. To get fresh relative dates without deleting data, explicitly edit them in a
 development shell or use a new empty development database. Seeding is disabled in deployment.
 
+## Navigation wireframe
+
+With the development server running, open [the LexFlow wireframe](http://127.0.0.1:8000/wireframe/).
+The [journey map and walkthrough](docs/navigation-and-screen-design.md) cover client intake,
+case creation, document upload, and assigned work. Use fictional inputs. The preview
+keeps changes in the current page and resets when refreshed.
+
 ## Run checks and browser workflows
 
 Keep PostgreSQL running. Tests create and destroy `POSTGRES_TEST_DB` (default

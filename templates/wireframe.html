@@ -1,0 +1,36 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LexFlow wireframe</title>
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'wireframe/style.css' %}">
+  <script type="module" src="{% static 'wireframe/app.js' %}"></script>
+</head>
+<body>
+  <a href="#main" id="skip" class="visually-hidden-focusable skip">Skip to content</a>
+  <header id="header"></header>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <main id="main" class="container" tabindex="-1"><p role="status">Loading wireframe…</p></main>
+  <footer class="container py-4">
+    <details><summary>Wireframe preview controls</summary>
+      <p class="mt-2">Preview interface states using fictional records.</p>
+      <button class="btn btn-outline-secondary" type="button" data-action="loading">Preview loading</button>
+      <button class="btn btn-outline-secondary" type="button" data-action="error">Preview error</button>
+    </details>
+  </footer>
+  <dialog id="confirmation" aria-labelledby="confirm-title">
+    <form method="dialog">
+      <h2 id="confirm-title" class="h4"></h2>
+      <p id="confirm-description"></p>
+      <div class="actions">
+        <button class="btn btn-outline-secondary" value="cancel" autofocus>Cancel</button>
+        <button class="btn btn-primary" value="confirm">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+  <noscript><p class="container">Enable JavaScript to use the clickable wireframe.</p></noscript>
+</body>
+</html>
