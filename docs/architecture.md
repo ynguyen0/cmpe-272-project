@@ -13,7 +13,7 @@ details below with explicit links, responsibility fields, revisions and aware du
 
 | App | Responsibility / initial schema |
 | --- | --- |
-| `accounts` | Custom email-identity user, one explicit application role, sign-in/out, bootstrap and demo commands |
+| `accounts` | Custom email-identity user, sign-in/out, password change and recovery, session expiry, account administration |
 | `clients` | Client identity/contact information and record creator |
 | `cases` | Case records, client links, team memberships, read selectors, initial list/detail pages |
 | `documents` | Private storage adapter, document metadata and archive fields |
@@ -46,6 +46,10 @@ record reads. Case detail lookup uses the filtered queryset, making nonexistent 
 unassigned IDs both 404. Client access follows the backlog's unlinked/shared-client
 rules; a shared client does not grant visibility into all its cases. Active administrators
 have global read access. Django's session authentication rejects inactive users.
+Account deactivation also increments the account's session version, invalidating prior
+sessions and recovery links after reactivation. PostgreSQL serializes sign-in attempts
+per identity and account administration writes. Account changes and their audit events
+commit in the same transaction.
 
 Upcoming feature work should place multi-record mutations in each app's `services.py`,
 with server-side role/action checks, field validation, transactions, row locking or

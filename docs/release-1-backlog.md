@@ -84,7 +84,7 @@ As a signed-in user, I can end my session securely.
 #### USER-01 — Create accounts (foundation)
 As an administrator, I can create accounts for authorized colleagues.
 - A documented local bootstrap command creates the first administrator without public registration or committed credentials; subsequent accounts require an authenticated administrator. Supply name, email, role, and initial password; return the generated ID and active status without echoing the password.
-- Duplicate normalized emails, weak/blank passwords, invalid roles, and missing fields are rejected atomically. Initial passwords are handed to demo users locally; self-service password recovery is deferred.
+- Duplicate normalized emails, weak/blank passwords, invalid roles, and missing fields are rejected atomically. Initial passwords are handed to demo users locally. Users can change their password or request an emailed recovery link that expires after 30 minutes and is valid for one use.
 - Attorney, staff, and anonymous calls cannot create users or enumerate the administration list.
 
 #### USER-02 — Deactivate users and change roles (depends on USER-01, ACCESS-01)
@@ -230,6 +230,14 @@ As a reviewer, I can follow a repeatable demonstration and inspect the delivered
 - Demonstration credentials/data are synthetic; presentation/video/source contain no real client data, private secrets, or live session tokens. Confirm every required story has implementation, passing test evidence, and a demo checkpoint before sign-off.
 
 ## Requirements traceability
+
+### Authentication and account administration (2026-11-12)
+
+| Requirement | Implementation | Local evidence |
+| --- | --- | --- |
+| AUTH-01/02 | [Authentication views](../accounts/views.py), [throttle and account services](../accounts/services.py), [session middleware](../accounts/middleware.py) | [Account workflow tests](../tests/test_accounts.py) cover generic login failures, throttling, session timeouts, revocation, password change and single-use recovery. Browser routes redirect anonymous and expired sessions to sign-in. |
+| USER-01/02 | [Initial custom user migration](../accounts/migrations/0001_initial.py), [account forms](../accounts/forms.py), [access service](../accounts/services.py) | Account workflow tests cover creation, role boundaries, deactivation, reactivation, stale edits, and last-administrator protection. [Chromium workflow](../tests/browser/test_account_workflow.py) covers account creation through deactivation. |
+| LOG-01 (account events) | [Audit writer](../accounts/security.py), [URL redaction](../config/logging.py) | Account workflow tests check audit results and reset URL redaction. Case and other record audit coverage remain tracked separately. |
 
 ### Foundation evidence (2026-11-10; partial stories)
 

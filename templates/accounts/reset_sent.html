@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Reset link requested · LexFlow{% endblock %}
+{% block content %}
+<h1 class="h3">Check your email</h1>
+<p>If an active account matches that address, you’ll receive a password reset link.</p>
+<a href="{% url 'accounts:login' %}">Back to sign in</a>
+{% endblock %}

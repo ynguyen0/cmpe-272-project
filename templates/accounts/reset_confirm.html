@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Reset password · LexFlow{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-md-8 col-lg-6">
+  {% if validlink %}
+    <h1 class="h3">Choose a new password</h1>
+    {% include 'accounts/form_fields.html' with submit_label="Reset password" %}
+  {% else %}
+    <h1 class="h3">Reset link unavailable</h1>
+    <p>This link is invalid, expired, or already used.</p>
+    <a href="{% url 'accounts:password_reset' %}">Request a new link</a>
+  {% endif %}
+</div></div>
+{% endblock %}

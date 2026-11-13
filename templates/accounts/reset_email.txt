@@ -1,0 +1,6 @@
+{% autoescape off %}Use this link to reset your LexFlow password:
+
+{{ protocol }}://{{ domain }}{% url 'accounts:password_reset_confirm' uidb64=uid token=token %}
+
+If you did not request a password reset, you can ignore this email.
+{% endautoescape %}

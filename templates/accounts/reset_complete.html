@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}Password reset complete · LexFlow{% endblock %}
+{% block content %}
+<h1 class="h3">Your password has been reset</h1>
+<a href="{% url 'accounts:login' %}">Sign in with your new password</a>
+{% endblock %}

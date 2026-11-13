@@ -39,6 +39,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "accounts.middleware.AccountSessionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "accounts.middleware.PrivateResponseMiddleware",
@@ -75,13 +76,17 @@ DATABASES = {
 }
 AUTH_USER_MODEL = "accounts.User"
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "OPTIONS": {"user_attributes": ["email", "full_name"]},
+    },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
         "OPTIONS": {"min_length": 12},
     },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "accounts.security.MaximumPasswordLengthValidator"},
 ]
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "America/Los_Angeles"
@@ -108,5 +113,18 @@ LOGOUT_REDIRECT_URL = "accounts:login"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 1800
+SESSION_ABSOLUTE_AGE = 8 * 60 * 60
+LOGIN_FAILURE_LIMIT = 5
+LOGIN_FAILURE_WINDOW = 15 * 60
+PASSWORD_RESET_TIMEOUT = 30 * 60
 X_FRAME_OPTIONS = "DENY"
 ALLOW_DEMO_DATA = False
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {"redact_recovery": {"()": "config.logging.RedactRecoveryURL"}},
+    "loggers": {
+        name: {"filters": ["redact_recovery"]}
+        for name in ("django.server", "django.request", "django.security.csrf")
+    },
+}

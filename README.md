@@ -7,8 +7,9 @@ and [team workflow/definition of done](CONTRIBUTING.md).
 The [database design and ER diagram](docs/database-design.md) define the fields,
 protected relationships, constraints, indexes, archive rules, and migration strategy.
 
-The foundation currently provides email sign-in/sign-out, an assigned-case list/detail
-page, six domain apps with initial migrations, private storage, and fictional seeds.
+The application provides email sign-in, password recovery, account administration, and
+assigned-case list/detail pages. The foundation also includes six domain apps with
+initial migrations, private storage, and fictional seeds.
 The remaining release workflows are tracked in the backlog; this scaffold is not the
 completed release or a production-ready legal records system.
 
@@ -49,6 +50,20 @@ role is distinct from Django's `is_staff` flag. There is no Django admin route e
 For a non-demo bootstrap account, run `uv run python manage.py createsuperuser`;
 it prompts for an email, full name, and password and assigns the Administrator role.
 
+## Authentication and accounts
+
+Sign in as an administrator and open **Accounts** to create a colleague’s account or
+edit an existing account’s role and status. Account changes take effect on the next
+request. Deactivating an account also revokes its existing sessions and reset links,
+even if the account is later reactivated.
+
+Use **Change password** from the navigation or **Forgot your password?** from the
+sign-in page. In development, open the reset email in the ignored `.dev-email/`
+directory. Reset links expire after 30 minutes and can be used once. Five failed
+sign-in attempts for one email block further attempts for that email until the
+15-minute window ends. Sessions expire after 30 minutes of inactivity or eight hours
+from sign-in.
+
 Demo records include Alpha/Beta cases with separate teams, five clients including one
 shared client and two unlinked intakes, explicit case/client and team responsibility
 links, two private text files (active/archived), four tasks and four deadlines due at
@@ -84,8 +99,8 @@ sh scripts/check.sh
 ```
 
 The shared script runs Ruff format/lint checks, Django checks, migration drift checks,
-foundation/schema tests, a real historical migration upgrade/downgrade/upgrade test,
-and a Chromium sign-in → case access/denial → sign-out workflow.
+authentication/foundation/schema tests, a historical migration round trip, and
+Chromium workflows for case access, account creation, recovery, and deactivation.
 Browser tests start their own Django server and isolated test database; no development
 server or seeded development data is required. Missing browsers fail the check rather
 than silently skipping it. Development uses Django's normal password hashers; the fast
@@ -133,7 +148,10 @@ route serves them. Future document downloads must use a server-authorized view.
 
 For deployment, supply a separate strong key, explicit hosts, HTTPS CSRF origins, an
 absolute persistent `DJANGO_PRIVATE_MEDIA_ROOT`, and dedicated database credentials
-from the hosting environment. Then run:
+from the hosting environment. Configure the `DJANGO_EMAIL_*` settings and
+`DJANGO_DEFAULT_FROM_EMAIL` in `.env.example` for your SMTP relay. If your proxy or
+application server records access logs, redact recovery URLs under `/accounts/reset/`.
+Then run:
 
 ```sh
 uv run python manage.py check --deploy --settings=config.settings.deployment --fail-level WARNING
