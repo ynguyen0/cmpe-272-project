@@ -2,5 +2,47 @@
 {% block content %}
 <a href="{% url 'cases:index' %}">Back to cases</a>
 <h1 class="h3 mt-3">{{ case.title }}</h1>
-<dl><dt>Case number</dt><dd>{{ case.number }}</dd><dt>Status</dt><dd>{{ case.status }}</dd><dt>Summary</dt><dd>{{ case.summary|default:'No summary recorded.' }}</dd></dl>
+<dl>
+  <dt>Case number</dt><dd>{{ case.number }}</dd>
+  <dt>Status</dt><dd>{% if case.is_archived %}Archived{% else %}{{ case.status }}{% endif %}</dd>
+  <dt>Court docket number</dt><dd>{{ case.court_docket_number|default:'—' }}</dd>
+  <dt>Summary</dt><dd>{{ case.summary|default:'No summary recorded.' }}</dd>
+</dl>
+<div class="d-flex gap-3 mb-3">
+  {% if can_edit %}<a href="{% url 'cases:edit' case.pk %}">Edit case details</a>{% endif %}
+  {% if can_archive %}<a href="{% url 'cases:archive' case.pk %}">Archive case</a>{% endif %}
+</div>
+<h2 class="h5">Clients</h2>
+<ul>
+  {% for client_record in clients %}
+    <li><a href="{% url 'cases:client_detail' client_record.pk %}">{{ client_record.name }}</a></li>
+  {% empty %}
+    <li>No linked clients.</li>
+  {% endfor %}
+</ul>
+<h2 class="h5">Documents</h2>
+<ul>
+  {% for document in documents %}
+    <li>
+      <a href="{% url 'cases:document_download' case.pk document.pk %}">{{ document.title }}</a>
+      {% if document.state == 'Archived' %}(archived)
+      {% elif can_manage_documents %}· <a href="{% url 'cases:document_edit' case.pk document.pk %}">Edit details</a>{% endif %}
+    </li>
+  {% empty %}
+    <li>No documents.</li>
+  {% endfor %}
+</ul>
+<h2 class="h5">Tasks</h2>
+{% if can_assign %}<p><a href="{% url 'cases:task_assign' case.pk %}">Assign task</a></p>{% endif %}
+<ul>
+  {% for task, can_complete in task_rows %}
+    <li>
+      {{ task.title }} · {{ task.assignee.full_name }} · {{ task.status }}
+      {% if can_assign and task.status != 'Done' %}· <a href="{% url 'cases:task_reassign' case.pk task.pk %}">Reassign</a>{% endif %}
+      {% if can_complete %}· <a href="{% url 'cases:task_complete' case.pk task.pk %}">Complete</a>{% endif %}
+    </li>
+  {% empty %}
+    <li>No tasks.</li>
+  {% endfor %}
+</ul>
 {% endblock %}

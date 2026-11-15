@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<a href="{% url 'cases:index' %}">Back to cases</a>
+<h1 class="h3 mt-3">Clients</h1>
+{% if can_create %}<p><a href="{% url 'cases:client_create' %}">Create client</a></p>{% endif %}
+<form method="get" class="mb-3">
+  <label for="client-search">Search clients</label>
+  <input id="client-search" type="search" name="q" value="{{ query }}" maxlength="200">
+  <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+</form>
+<ul>
+  {% for client_record in clients %}
+    <li><a href="{% url 'cases:client_detail' client_record.pk %}">{{ client_record.name }}</a></li>
+  {% empty %}
+    <li>No matching clients.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

@@ -15,7 +15,7 @@ details below with explicit links, responsibility fields, revisions and aware du
 | --- | --- |
 | `accounts` | Custom email-identity user, sign-in/out, password change and recovery, session expiry, account administration |
 | `clients` | Client identity/contact information and record creator |
-| `cases` | Case records, client links, team memberships, read selectors, initial list/detail pages |
+| `cases` | Case records, client links, team memberships, authorization policies, case-scoped views and writes |
 | `documents` | Private storage adapter, document metadata and archive fields |
 | `work` | Tasks with assignees/priority/due times; deadlines with responsibility/completion details |
 | `audit` | Append-only AuditEvent with actor/action/target/result/request/time and limited changed-field names |
@@ -24,37 +24,35 @@ details below with explicit links, responsibility fields, revisions and aware du
 The custom user is installed before the first migration, avoiding a later identity
 table swap. Email is normalized at creation/sign-in and has a database-backed
 case-insensitive uniqueness constraint. The application role is distinct from Django
-staff/superuser flags. Groups/model permissions may later describe coarse capabilities;
-they cannot replace case-specific policy checks. Existing group permissions do not
-grant access through the current selectors.
+staff/superuser flags. Optional capabilities use explicit user grants and are checked against the user's
+application role. Case operations also require an active case membership.
 
 ## Request and data flow
 
 ```mermaid
 flowchart LR
     Browser -->|HTTPS / session + CSRF| Django[Django views and templates]
-    Django --> Policy[Case and client read policies]
+    Django --> Policy[Role and membership policies]
     Policy --> DB[(PostgreSQL)]
-    Django --> Services[Future transactional domain services]
+    Django --> Services[Transactional domain services]
     Services --> DB
     Services --> Files[Private document storage]
     Django --> Static[Public Bootstrap/static assets]
 ```
 
-Views must begin with `cases.policies.cases_visible_to` or `clients_visible_to` for
-record reads. Case detail lookup uses the filtered queryset, making nonexistent and
-unassigned IDs both 404. Client access follows the backlog's unlinked/shared-client
-rules; a shared client does not grant visibility into all its cases. Active administrators
-have global read access. Django's session authentication rejects inactive users.
+Views use the filtered querysets in `cases.policies` for record reads. Case detail
+lookup returns 404 for nonexistent and unassigned IDs. A linked client is visible
+through an active link to an assigned case. Shared-client pages show only the
+viewer's assigned cases. Active membership is required for administrators as well.
+Django's session authentication rejects inactive users.
 Account deactivation also increments the account's session version, invalidating prior
 sessions and recovery links after reactivation. PostgreSQL serializes sign-in attempts
 per identity and account administration writes. Account changes and their audit events
 commit in the same transaction.
 
-Upcoming feature work should place multi-record mutations in each app's `services.py`,
-with server-side role/action checks, field validation, transactions, row locking or
-optimistic concurrency checks, and audit writes. Templates never decide permissions.
-This is a prescribed extension pattern, not a claim those mutation services already exist.
+Case mutations use server-side role and membership checks, scoped form fields,
+transactions, row locking, and revision checks for updates. Templates use permission
+decisions from the server to display available actions.
 
 Relationships: Client ↔ Case uses explicit CaseClient links; User ↔ Case uses explicit
 CaseMembership rows with active flags and responsibilities. Case read policies require

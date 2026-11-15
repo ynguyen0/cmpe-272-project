@@ -1,15 +1,32 @@
 {% extends 'base.html' %}
 {% block content %}
-<h1 class="h3">{% if user.is_administrator %}Firm cases{% else %}My cases{% endif %}</h1>
-<p class="text-secondary">Project foundation: assigned case access is available. Additional workflows are tracked in the release backlog.</p>
+<h1 class="h3">My cases</h1>
+<div class="d-flex flex-wrap gap-3 mb-3">
+  <a href="{% url 'cases:clients' %}">Clients</a>
+  {% if can_create %}<a href="{% url 'cases:create' %}">Create case</a>{% endif %}
+  {% if can_view_audit %}<a href="{% url 'cases:audit' %}">Audit records</a>{% endif %}
+</div>
+<dl class="d-flex flex-wrap gap-3">
+  {% for label, total in totals.items %}
+    <div class="border rounded bg-white px-3 py-2">
+      <dt>{{ label }}</dt><dd class="mb-0">{{ total }}</dd>
+    </div>
+  {% endfor %}
+</dl>
+<form method="get" class="mb-3">
+  <label for="case-search">Search cases</label>
+  <input id="case-search" type="search" name="q" value="{{ query }}" maxlength="200">
+  <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+</form>
 <div class="table-responsive">
   <table class="table table-striped bg-white">
     <caption>Cases you are authorized to view</caption>
     <thead><tr><th scope="col">Number</th><th scope="col">Title</th><th scope="col">Status</th></tr></thead>
     <tbody>
     {% for case in cases %}
-      <tr><td><a href="{% url 'cases:detail' case.pk %}">{{ case.number }}</a></td><td>{{ case.title }}</td><td>{{ case.status }}</td></tr>
-    {% empty %}<tr><td colspan="3">No cases are assigned to you.</td></tr>{% endfor %}
+      <tr><td><a href="{% url 'cases:detail' case.pk %}">{{ case.number }}</a></td><td>{{ case.title }}</td><td>{% if case.is_archived %}Archived{% else %}{{ case.status }}{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="3">{% if query %}No matching cases.{% else %}No cases are assigned to you.{% endif %}</td></tr>
+    {% endfor %}
     </tbody>
   </table>
 </div>

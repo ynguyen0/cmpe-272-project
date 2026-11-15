@@ -10,6 +10,7 @@ from django.utils.crypto import constant_time_compare
 
 from audit.models import AuditEvent
 from cases.models import Case, CaseMembership
+from cases.policies import Action, has_capability
 from work.models import Task
 
 from .models import LoginThrottle, User
@@ -62,7 +63,7 @@ def check_login(form):
 
 
 def require_administrator(request):
-    if not request.user.is_administrator:
+    if not has_capability(request.user, Action.MANAGE_ACCOUNTS):
         audit_account(request, "account.admin", AuditEvent.Result.DENIED, actor=request.user)
         raise PermissionDenied
 
@@ -80,7 +81,7 @@ def lock_account_administration(request):
 
 
 def check_assignments(target, *, role, is_active):
-    if not is_active or role == User.Role.ADMINISTRATOR:
+    if not is_active:
         if Task.objects.filter(assignee=target).exclude(status=Task.Status.DONE).exists():
             raise ValidationError("Reassign this account’s unfinished tasks before saving.")
 

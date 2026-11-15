@@ -42,6 +42,13 @@ class Case(RevisionedModel):
 
     class Meta:
         ordering = ["number"]
+        permissions = [
+            ("create_case_records", "Can create clients and cases as staff"),
+            ("manage_case_documents", "Can manage assigned case documents as staff"),
+            ("assign_case_tasks", "Can assign tasks in assigned cases as staff"),
+            ("archive_case", "Can archive assigned cases as an administrator"),
+            ("view_organization_audit", "Can view organization-wide audit records"),
+        ]
         indexes = [
             models.Index(fields=["is_archived", "status", "opened_on"], name="case_worklist_idx"),
             models.Index(fields=["court_docket_number"], name="case_docket_idx"),

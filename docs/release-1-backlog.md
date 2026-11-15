@@ -16,22 +16,26 @@ The detailed rules below are proposed baseline decisions, not claims that the ab
 
 ## Roles and permissions
 
-Each active account has exactly one role: **Administrator**, **Attorney**, or **Staff**. There is no public registration. Administrators have access to all records within this single-firm prototype, including user administration and audit review. Attorneys and staff need both the role permission below and the applicable case assignment. A role alone never grants them access to an unassigned case.
+Each active account has exactly one role: **Administrator**, **Attorney**, or **Staff**.
+Case actions require an active case membership for all three roles. Optional
+capabilities require a direct grant to the account.
 
 | Action | Administrator | Attorney | Staff |
 | --- | --- | --- | --- |
-| Create/deactivate users; change roles; review audit log | Yes | No | No |
-| Create clients; access own unlinked clients | Yes | Yes | Yes |
-| View/search/update linked clients | All | If assigned to any linked case | If assigned to any linked case |
-| Create a case | Yes | Yes; automatically assigned | No |
-| View case and its active documents, tasks, deadlines | All | Assigned cases | Assigned cases |
-| Edit case details, link clients, manage team/status | All | Assigned cases | No |
-| Upload/download documents; create/edit tasks and deadlines | All open cases | Assigned open cases | Assigned open cases |
-| Archive documents | All open cases | Assigned open cases | No |
-| Complete/reopen a task | All open cases | Assigned open cases | Own tasks in assigned open cases |
-| View personal dashboard | Yes | Yes | Yes |
+| Manage accounts and roles | Yes | No | No |
+| Create clients and cases | Yes | Yes | If granted |
+| View confidential case content | With case access | Assigned cases | Assigned cases |
+| Edit case details | With case access | Assigned cases | Summary and court docket number |
+| Manage documents | With case access | Assigned cases | Assigned cases, if granted |
+| Assign tasks | With case access | Assigned cases | Assigned cases, if granted |
+| Complete assigned tasks | With case access | Own tasks in assigned cases | Own tasks in assigned cases |
+| Archive a case | With case access and an explicit grant | Responsible attorney with case access | No |
+| View organization-wide audit records | Explicit grant | No | No |
 
-An unlinked client is visible/editable only to its creator and administrators. Once linked, case-based access replaces creator access. Access to a shared client never grants access to its other cases, their names, or their contents. A client page lists only cases the viewer may access. Only an administrator or assigned attorney may link an existing client, and they must already be allowed to view that client. Administrators can handle cross-team linking. Removing an assignment immediately removes case access, including previously copied URLs.
+A never-linked client is visible to its creator. A linked client requires an
+active link to a visible case. A shared-client page lists the viewer's authorized
+cases. Removing a membership revokes case access on the next request, including
+previously copied download URLs.
 
 ## Shared acceptance rules
 
@@ -40,7 +44,7 @@ These rules are acceptance criteria for **every** story, including the negative 
 - **G1 — Authorization:** enforce permissions on the server for list, search, detail, download, and mutation requests; hiding a button is insufficient. Missing/expired authentication returns 401. A forbidden role action returns 403; an inaccessible or nonexistent record ID returns the same 404 response. Failures expose no record contents, counts, filenames, or storage URLs and make no business-data change. Search, summaries, and related records use the same filters.
 - **G2 — Validation:** trim surrounding whitespace; reject blank required fields, excessive lengths, unknown enums/fields, invalid identifiers, and invalid relationships. Invalid requests return field errors (400 or 422), preserve entered nonsecret values, and make no partial change. Treat free text as text, never executable HTML. Recheck permissions and referenced records at write time.
 - **G3 — Integrity:** generate immutable IDs, creator, and creation/update timestamps server-side. Persist successful changes across refresh and restart. Use transactions for multi-record changes. Reject stale edits with 409 and offer reload rather than silently overwriting changes. Do not expose password fields in responses.
-- **G4 — State:** closed cases and their documents/tasks/deadlines are readable to authorized users but immutable except for reopening by an administrator or assigned attorney. Client records can still be corrected. There is no hard-delete endpoint for clients, cases, documents, users, tasks, deadlines, or audit entries in release 1. Routine removal uses archive or deactivation as defined in the database design; authorized historical reads remain available. Archiving a closed case is a permitted administrative lifecycle action, preserving its contents.
+- **G4 — State:** closed cases and their documents/tasks/deadlines are readable to authorized users but immutable except for reopening by an administrator or assigned attorney. Client records can still be corrected. There is no hard-delete endpoint for clients, cases, documents, users, tasks, deadlines, or audit entries in release 1. Routine removal uses archive or deactivation as defined in the database design; authorized historical reads remain available. Archiving a closed case is permitted for its assigned responsible attorney or an assigned administrator with an explicit grant.
 - **G5 — Accountability:** record successful reads/searches/downloads and mutations, authentication events, and authorization denials under LOG-01/02. A mutation and its audit event succeed together or neither commits. Never log passwords, session tokens, document contents, or client contact/notes text.
 
 ## Data and state decisions
@@ -59,7 +63,7 @@ Lengths are maximum characters unless noted; IDs and timestamps are generated, n
 - **Case transitions:** `Open → On hold → Open`; either `Open` or `On hold → Closed`; `Closed → Open`. Both `Open` and `On hold` permit normal edits (the permission matrix's “open cases” includes both). Closing requires every task to be `Done` and every deadline to be `Completed` or `Cancelled`; otherwise return 409 with the accessible blockers. Reopening requires at least one active assigned attorney; an administrator may supply one as part of the same reopen transaction if all previous attorneys became inactive or changed role while the case was closed. No bulk override.
 - **Tasks:** `To do → In progress → Done`, `To do → Done`, and `Done → To do` (reopen); `In progress → To do` also allowed. Set completion time on `Done`; clear it on reopen. Reject all other transitions and unknown statuses.
 - **Deadlines:** `Pending → Completed` or `Cancelled`; `Completed/Cancelled → Pending` on an editable case, clearing completion fields. A pending item with `due_at < now` is overdue; upcoming is now through the end of firm-local day +7 inclusive. Completed/cancelled items are excluded. Tasks use the same instant rules, excluding `Done`. Default work lists exclude archived items, but closure blockers still consider unfinished archived work.
-- **Assignments:** only active attorneys/staff may be team members; administrators have global access and need no membership. Retain at least one active attorney per nonclosed case. Block removal, deactivation, or role change that would leave a nonclosed case without one, or leave unfinished tasks assigned to a nonmember/inactive user. Return 409 with blockers the administrator/attorney can resolve first. Done tasks retain historical attribution. Reassignment must target an active member of the same case.
+- **Assignments:** only active users may be added as team members or selected as case task assignees. Retain at least one active attorney per nonclosed case. Block removal, deactivation, or role change that would leave a nonclosed case without one, or leave unfinished tasks assigned to a nonmember/inactive user. Return 409 with blockers the administrator/attorney can resolve first. Done tasks retain historical attribution. Reassignment must target an active member of the same case.
 - **Files:** accept `.pdf`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg` only, matching server-validated content type/signature (UTF-8 text for TXT; valid DOCX container for DOCX). Reject empty, corrupt, encrypted, disguised, or unsupported files, path-bearing filenames, and files larger than 10 MiB (10,485,760 bytes). Use generated private storage keys; original names are display metadata. Downloads require a fresh authorization check and attachment disposition. No public file URLs or inline preview. Duplicate filenames are separate document IDs; no overwrites or versioning.
 - **Archive:** documents use one-way `Active → Archived`, with actor/time and required reason (1–500). Keep bytes and metadata; hide from default work lists. Authorized users may explicitly include archived records and request historical downloads through the same fresh case authorization check; unassigned/inactive users remain denied. Other entities use the archive/deactivate fields specified in the database design. Repeated archive requests return 409. Restoration, retention automation, and physical purge are deferred.
 

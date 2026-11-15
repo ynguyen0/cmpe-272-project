@@ -7,11 +7,10 @@ and [team workflow/definition of done](CONTRIBUTING.md).
 The [database design and ER diagram](docs/database-design.md) define the fields,
 protected relationships, constraints, indexes, archive rules, and migration strategy.
 
-The application provides email sign-in, password recovery, account administration, and
-assigned-case list/detail pages. The foundation also includes six domain apps with
-initial migrations, private storage, and fictional seeds.
-The remaining release workflows are tracked in the backlog; this scaffold is not the
-completed release or a production-ready legal records system.
+The application provides email sign-in, password recovery, account administration,
+and membership-scoped case and client workflows. The dashboard, search results, task
+actions, and private downloads use the same case access rules. Remaining release
+workflows are tracked in the backlog.
 
 ## Prerequisites
 
@@ -67,8 +66,8 @@ from sign-in.
 Demo records include Alpha/Beta cases with separate teams, five clients including one
 shared client and two unlinked intakes, explicit case/client and team responsibility
 links, two private text files (active/archived), four tasks and four deadlines due at
-17:00 firm time on day -1, 0, +7, and +8, and a seed audit event. Only the case
-pages are exposed yet. The other records support subsequent workflow development.
+17:00 firm time on day -1, 0, +7, and +8, and a seed audit event. The seed administrator
+can manage accounts and starts with no case memberships or additional grants.
 
 `uv run python manage.py seed_demo` is repeatable: it does not duplicate fixture records,
 delete unrelated data, change existing passwords, or reset existing task/deadline dates.
@@ -77,6 +76,42 @@ links rather than reactivating them. `DEMO-*` case numbers and
 `@example.test` fixture emails are reserved for this command; use a dedicated local
 database. To get fresh relative dates without deleting data, explicitly edit them in a
 development shell or use a new empty development database. Seeding is disabled in deployment.
+
+## Case access and explicit grants
+
+All three roles need an active membership to access case records and documents.
+Linked clients require an active link to a visible case. A never-linked intake is
+visible to its creator. Staff with case access can edit the summary and court docket
+number. Task completion requires the acting user to be the current assignee.
+
+Optional capabilities use direct Django user permissions. After running migrations,
+an operator can add or remove a grant in `uv run python manage.py shell`:
+
+```python
+from accounts.models import User
+from django.contrib.auth.models import Permission
+
+user = User.objects.get(email="staff.a@example.test")
+grant = Permission.objects.get(
+    content_type__app_label="cases",
+    content_type__model="case",
+    codename="manage_case_documents",
+)
+user.user_permissions.add(grant)
+# To revoke: user.user_permissions.remove(grant)
+```
+
+| Role | Grant codename | Capability |
+| --- | --- | --- |
+| Staff | `create_case_records` | Create clients and cases |
+| Staff | `manage_case_documents` | Edit document metadata in assigned cases |
+| Staff | `assign_case_tasks` | Assign and reassign tasks in assigned cases |
+| Administrator | `archive_case` | Archive closed cases with active membership |
+| Administrator | `view_organization_audit` | View organization-wide audit records |
+
+The responsible attorney can archive a closed case while their membership is active.
+For case access, the operator maintains `CaseMembership` rows. Setting
+`is_active=False` revokes access on the next request, including copied download URLs.
 
 ## Navigation wireframe
 

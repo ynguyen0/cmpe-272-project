@@ -59,7 +59,7 @@ class PermissionTests(SeededTestCase):
 
     def test_roles_and_membership_scope_case_reads(self):
         for email, expected in [
-            ("admin@example.test", {self.alpha.pk, self.beta.pk}),
+            ("admin@example.test", set()),
             ("attorney.a@example.test", {self.alpha.pk}),
             ("attorney.b@example.test", {self.beta.pk}),
             ("staff.a@example.test", {self.alpha.pk}),

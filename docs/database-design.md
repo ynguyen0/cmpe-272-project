@@ -233,15 +233,13 @@ uses state Archived with actor/time/reason. No feature exposes hard deletion. Ar
 records and links remain stored and subject to exactly the same authorization policy.
 An archive flag never grants access, and removing access never erases history.
 
-`cases_visible_to` requires an active user and active case membership, or the active
-Administrator role, and deliberately permits authorized historical/archived case reads.
-`clients_visible_to` requires an active client link to a visible case, or creator/admin
-access for a never-linked intake. Historical inactive links never restore creator access.
-Future work lists should hide archives by default with an explicit authorized archive
-view. Archived documents remain available for authorized historical retrieval through
-the eventual download service, with fresh policy checks and audit events; private files
-still have no public route today. This supersedes the earlier backlog's blanket ban on
-archived downloads, in accordance with the database-design request.
+`cases_visible_to` requires an active user and active case membership for each role,
+including administrators. Authorized case members can read archived case history.
+`clients_visible_to` requires an active client link to a visible case or creator access
+to a never-linked intake. Historical inactive links never restore creator access.
+Documents, tasks, and deadlines inherit case visibility. Active and archived documents
+are served through an authenticated download route that checks current case membership.
+The private storage backend exposes no public URL.
 
 The database enforces the row-local constraints and same-case relationships above.
 Cross-row lifecycle rules still belong in authorized transactional services: active
