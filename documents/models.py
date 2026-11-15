@@ -26,6 +26,7 @@ class Document(RevisionedModel):
 
     case = models.ForeignKey("cases.Case", on_delete=models.PROTECT, related_name="documents")
     title = models.CharField(max_length=200)
+    description = models.CharField(max_length=2000, blank=True)
     category = models.CharField(max_length=20, choices=Category.choices)
     state = models.CharField(max_length=10, choices=State.choices, default=State.ACTIVE)
     file = models.FileField(upload_to=private_upload_path, max_length=255, unique=True)
@@ -34,6 +35,7 @@ class Document(RevisionedModel):
     size = models.PositiveBigIntegerField()
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    malware_scanned_at = models.DateTimeField(null=True, blank=True, editable=False)
     archived_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, related_name="archives"
     )

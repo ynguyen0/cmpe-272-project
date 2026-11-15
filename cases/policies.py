@@ -89,6 +89,10 @@ def can_link_clients(user, case):
     return can_manage_case(user, case)
 
 
+def can_archive_documents(user, case):
+    return can_manage_case(user, case)
+
+
 def documents_visible_to(user):
     return Document.objects.filter(case__in=cases_visible_to(user))
 

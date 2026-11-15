@@ -6,6 +6,7 @@ from .base import *
 
 DEBUG = False
 ALLOW_DEMO_DATA = True
+DOCUMENT_CLAMDSCAN = ""
 ALLOWED_HOSTS = ["testserver", "localhost", "127.0.0.1", "[::1]"]
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"

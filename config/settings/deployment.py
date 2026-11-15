@@ -16,6 +16,10 @@ if not CSRF_TRUSTED_ORIGINS or any(
 required("DJANGO_PRIVATE_MEDIA_ROOT")
 if not PRIVATE_MEDIA_ROOT.is_absolute():
     raise ImproperlyConfigured("DJANGO_PRIVATE_MEDIA_ROOT must be an absolute private path.")
+DOCUMENT_REQUIRE_SCAN = True
+DOCUMENT_CLAMDSCAN = required("DJANGO_CLAMDSCAN_PATH")
+if not Path(DOCUMENT_CLAMDSCAN).is_absolute():
+    raise ImproperlyConfigured("DJANGO_CLAMDSCAN_PATH must be an absolute executable path.")
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

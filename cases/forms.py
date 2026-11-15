@@ -5,6 +5,7 @@ from accounts.models import User
 from clients.models import Client
 from clients.search import PHONE_INPUT, phone_digits
 from documents.models import Document
+from documents.validation import validate_upload
 from work.models import Task
 
 from .models import Case
@@ -14,7 +15,7 @@ from .policies import clients_visible_to, eligible_assignees
 class StrictFields:
     def clean(self):
         cleaned = super().clean()
-        if self.data.keys() - self.fields.keys() - {"csrfmiddlewaretoken"}:
+        if (self.data.keys() | self.files.keys()) - self.fields.keys() - {"csrfmiddlewaretoken"}:
             raise forms.ValidationError("This request contains unsupported fields.")
         return cleaned
 
@@ -257,12 +258,42 @@ class CaseEditForm(StrictFields, CaseDateValidation, forms.ModelForm):
             del self.fields[field]
 
 
+class DocumentListForm(StrictFields, forms.Form):
+    category = forms.ChoiceField(
+        choices=[("", "All categories"), *Document.Category.choices], required=False
+    )
+    state = forms.ChoiceField(
+        choices=[("", "Active"), (Document.State.ARCHIVED, "Archived")], required=False
+    )
+    page = forms.IntegerField(required=False, min_value=1)
+
+
+class DocumentUploadForm(StrictFields, forms.ModelForm):
+    class Meta:
+        model = Document
+        fields = ("title", "category", "description", "file")
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 3}),
+            "file": forms.FileInput(attrs={"accept": ".pdf,.docx,.txt,.jpg,.jpeg,.png"}),
+        }
+
+    def clean_file(self):
+        file = self.cleaned_data["file"]
+        self.detected_type = validate_upload(file)
+        return file
+
+
+class DocumentArchiveForm(RevisionForm):
+    archive_reason = forms.CharField(label="Archive reason", max_length=500)
+
+
 class DocumentEditForm(StrictFields, forms.ModelForm):
     revision = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
 
     class Meta:
         model = Document
-        fields = ("title", "category", "revision")
+        fields = ("title", "category", "description", "revision")
+        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
 
 class TaskAssignmentForm(StrictFields, forms.ModelForm):

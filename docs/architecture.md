@@ -78,12 +78,12 @@ PostgreSQL FKs prevent responsible attorneys/task assignees/deadline owners from
 to another case's team. An atomic revision helper detects stale updates; all future
 feature mutations must use that helper and authorized transactional services.
 
-Private document bytes live outside public/static directories with generated keys.
-The storage adapter refuses `.url`, and there is no file-serving route. Later DOC-02
-must authorize each download and set attachment headers; a future object-store adapter
-must preserve that contract. Database/file backups must be coordinated because file
-writes are not database transactions. The seed command cleans up newly written files
-if its database transaction fails.
+Private documents use generated storage keys and are served through authorized
+attachment downloads. Hosted uploads stage in a private temporary file and publish
+only after ClamAV returns clean. The backup command exports a PostgreSQL snapshot and
+copies the immutable files referenced in that snapshot. See
+[document operations](document-operations.md) for scanner setup, backup, restore,
+and cleanup.
 
 ## Environment and validation boundaries
 

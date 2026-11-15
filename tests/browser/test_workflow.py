@@ -124,3 +124,54 @@ class CaseWorkflowTests(StaticLiveServerTestCase):
             expect(page.get_by_text("Fictional case description")).to_be_visible()
             expect(page.get_by_role("link", name="Reopen case")).to_be_visible()
             browser.close()
+
+
+class DocumentWorkflowTests(StaticLiveServerTestCase):
+    def test_upload_download_and_archive_in_browser(self):
+        password = "Fictional-browser-passphrase-73!"
+        with patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": password}):
+            call_command("seed_demo", stdout=StringIO())
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            page.goto(self.live_server_url)
+            page.get_by_label("Email", exact=True).fill("attorney.a@example.test")
+            page.get_by_label("Password", exact=True).fill(password)
+            page.get_by_role("button", name="Sign in", exact=True).click()
+            page.get_by_role("link", name="DEMO-ALPHA", exact=True).click()
+            page.get_by_role("link", name="Upload document", exact=True).click()
+
+            title = "Fictional hearing notes"
+            content = b"Fictional browser document."
+            page.get_by_label("Title", exact=True).fill(title)
+            page.get_by_label("Category", exact=True).select_option("Evidence")
+            page.get_by_label("Description", exact=True).fill("Synthetic upload")
+            page.get_by_label("File", exact=True).set_input_files(
+                {"name": "hearing-notes.txt", "mimeType": "text/plain", "buffer": content}
+            )
+            page.get_by_role("button", name="Upload document", exact=True).click()
+            expect(page.get_by_role("heading", name=title)).to_be_visible()
+            download_link = page.get_by_role("link", name=f"Download {title}")
+            copied_href = download_link.get_attribute("href")
+            with page.expect_download() as pending:
+                download_link.click()
+            download = pending.value
+            self.assertEqual(download.suggested_filename, "hearing-notes.txt")
+            self.assertEqual(download.path().read_bytes(), content)
+
+            page.get_by_role("link", name=f"Archive {title}").click()
+            page.get_by_label("Archive reason").fill("Fictional revision")
+            page.get_by_role("button", name="Archive document").click()
+            expect(page.get_by_role("heading", name=title)).to_have_count(0)
+            page.get_by_label("State").select_option(value="Archived")
+            page.get_by_role("button", name="Filter").click()
+            expect(page.get_by_role("heading", name=title)).to_be_visible()
+
+            page.get_by_role("button", name="Sign out", exact=True).click()
+            page.get_by_label("Email", exact=True).fill("attorney.b@example.test")
+            page.get_by_label("Password", exact=True).fill(password)
+            page.get_by_role("button", name="Sign in", exact=True).click()
+            response = page.goto(f"{self.live_server_url}{copied_href}")
+            self.assertEqual(response.status, 404)
+            browser.close()

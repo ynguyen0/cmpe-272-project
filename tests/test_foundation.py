@@ -236,6 +236,7 @@ class SettingsTests(SimpleTestCase):
             "DJANGO_ALLOWED_HOSTS": "lexflow.example.test",
             "DJANGO_CSRF_TRUSTED_ORIGINS": "https://lexflow.example.test",
             "DJANGO_PRIVATE_MEDIA_ROOT": str(settings.PRIVATE_MEDIA_ROOT),
+            "DJANGO_CLAMDSCAN_PATH": "/usr/bin/clamdscan",
         }
         result = subprocess.run(
             [

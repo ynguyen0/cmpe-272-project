@@ -40,16 +40,23 @@
   {% endfor %}
 </ul>
 <h2 class="h5">Documents</h2>
+<p class="d-flex flex-wrap gap-3">
+  <a href="{% url 'cases:documents' case.pk %}">All case documents</a>
+  {% if can_manage_documents %}<a href="{% url 'cases:document_upload' case.pk %}">Upload document</a>{% endif %}
+</p>
 <ul>
   {% for document in documents %}
     <li>
-      <a href="{% url 'cases:document_download' case.pk document.pk %}">{{ document.title }}</a>
+      {% if require_document_scan and not document.malware_scanned_at %}
+        {{ document.title }} · Awaiting malware scan
+      {% else %}
+        <a href="{% url 'cases:document_download' case.pk document.pk %}">{{ document.title }}</a>
+      {% endif %}
       · {{ document.category }}
-      {% if document.state == 'Archived' %}(archived)
-      {% elif can_manage_documents %}· <a href="{% url 'cases:document_edit' case.pk document.pk %}">Edit details</a>{% endif %}
+      {% if can_manage_documents %}· <a href="{% url 'cases:document_edit' case.pk document.pk %}">Edit details</a>{% endif %}
     </li>
   {% empty %}
-    <li>No documents.</li>
+    <li>No active documents.</li>
   {% endfor %}
 </ul>
 <h2 class="h5">Tasks</h2>

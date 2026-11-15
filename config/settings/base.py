@@ -98,6 +98,15 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 PRIVATE_MEDIA_ROOT = Path(
     os.environ.get("DJANGO_PRIVATE_MEDIA_ROOT", str(BASE_DIR / "private-media"))
 )
+private_root = PRIVATE_MEDIA_ROOT.resolve()
+for public_root in (STATIC_ROOT, *STATICFILES_DIRS):
+    public_root = public_root.resolve()
+    if private_root.is_relative_to(public_root) or public_root.is_relative_to(private_root):
+        raise ImproperlyConfigured("Private media and public static directories must not overlap.")
+FILE_UPLOAD_HANDLERS = ["documents.uploads.DocumentUploadHandler"]
+DATA_UPLOAD_MAX_NUMBER_FILES = 1
+DOCUMENT_CLAMDSCAN = os.environ.get("DJANGO_CLAMDSCAN_PATH", "")
+DOCUMENT_REQUIRE_SCAN = False
 # No public MEDIA_URL and no URL pattern serving these files.
 STORAGES = {
     "default": {

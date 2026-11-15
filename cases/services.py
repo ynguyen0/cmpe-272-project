@@ -261,13 +261,15 @@ def audit_change(request, action, record, fields=()):
     return audit_event(request, action, record._meta.model_name, str(record.pk), fields)
 
 
-def audit_event(request, action, resource_type, resource_id="", fields=()):
+def audit_event(
+    request, action, resource_type, resource_id="", fields=(), *, result=AuditEvent.Result.SUCCESS
+):
     return AuditEvent.objects.create(
         actor=request.user,
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
-        result=AuditEvent.Result.SUCCESS,
+        result=result,
         correlation_id=uuid4(),
         # Audit change names are limited by the existing append-only schema.
         changed_fields=[field for field in fields if field in AuditEvent.CHANGE_FIELDS],

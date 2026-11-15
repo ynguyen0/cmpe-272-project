@@ -59,6 +59,9 @@ Initial status for every story was **Planned**; owner: **Unassigned**. The backl
 | CASE-01 | Codex; team owner pending | In review | Transactional creation of the case, multiple client links, team and audit event | Team review |
 | CASE-02 | Codex; team owner pending | In review | Scoped workspace, search, status/type filters, sorting, paging, and revision-checked edits | Team review |
 | CASE-04 | Codex; team owner pending | In review | Case status changes, closure blockers, reopen and archive with retained history | Deadline resolution remains in DATE-02 |
+| DOC-01 | Codex; team owner pending | In review | Bounded upload, file and format validation, private storage, hosted ClamAV scanning, and failure cleanup | Configure ClamAV in hosted environments |
+| DOC-02 | Codex; team owner pending | In review | Case-scoped document filters, metadata edits, attachment downloads and audit events | Team review |
+| DOC-03 | Codex; team owner pending | In review | Archive reason, historical download, and original file retention | Team review |
 | DEL-01 | Codex; team owner pending | In progress | `scripts/check.sh`, workflow, Jenkinsfile; 34 local tests passed on 2026-11-10 including migration/schema checks | Expand tests with release workflows; hosted CI/induced-failure evidence remains |
 | DEL-02 | Codex; team owner pending | In progress | Root README, architecture, lock, migrations, seed, contributing policy | Teammate review/reproduction, backup/restore and final delivery docs remain |
 | LOG-01 | Codex; team owner pending | In progress | `audit/models.py`, append-only PostgreSQL trigger, `AuditHistoryTests` | Event capture, transactional integration and release event coverage remain |

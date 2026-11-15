@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -10,10 +11,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_safe
 
 from accounts.models import User
+from audit.models import AuditEvent
 from clients.models import Client
 from clients.search import possible_duplicates, search_clients
 from config.models import ConcurrentEditError
 from documents.models import Document
+from documents.scanning import ScanUnavailable, scan_upload
+from documents.services import publish_document
+from documents.uploads import safe_filename
 from work.models import Task
 
 from .forms import (
@@ -26,7 +31,10 @@ from .forms import (
     ClientEditForm,
     ClientForm,
     ClientSearchForm,
+    DocumentArchiveForm,
     DocumentEditForm,
+    DocumentListForm,
+    DocumentUploadForm,
     RevisionForm,
     TaskAssignmentForm,
     TaskReassignmentForm,
@@ -37,6 +45,7 @@ from .policies import (
     Action,
     audit_events_visible_to,
     can_archive_clients,
+    can_archive_documents,
     can_complete_task,
     can_link_clients,
     can_manage_case,
@@ -143,7 +152,10 @@ def detail(request, pk):
             "team": case.memberships.filter(is_active=True)
             .select_related("user")
             .order_by("user__full_name", "pk"),
-            "documents": documents_visible_to(user).filter(case=case).order_by("state", "title"),
+            "documents": documents_visible_to(user)
+            .filter(case=case, state=Document.State.ACTIVE)
+            .order_by("-uploaded_at", "-pk")[:10],
+            "require_document_scan": settings.DOCUMENT_REQUIRE_SCAN,
             "deadlines": deadlines_visible_to(user)
             .filter(case=case)
             .select_related("responsible_user")
@@ -560,18 +572,106 @@ def case_archive(request, pk):
 
 @login_required
 @require_safe
+def document_index(request, pk):
+    case = get_object_or_404(cases_visible_to(request.user), pk=pk)
+    form = DocumentListForm(request.GET)
+    page = None
+    if form.is_valid():
+        data = form.cleaned_data
+        documents = documents_visible_to(request.user).filter(
+            case=case, state=data["state"] or Document.State.ACTIVE
+        )
+        if data["category"]:
+            documents = documents.filter(category=data["category"])
+        paginator = Paginator(
+            documents.select_related("uploaded_by", "archived_by").order_by("-uploaded_at", "-pk"),
+            25,
+        )
+        number = data["page"] or 1
+        if number > paginator.num_pages:
+            form.add_error("page", "This page does not exist.")
+        else:
+            page = paginator.page(number)
+            if request.method == "GET":
+                audit_change(request, "document.list", case)
+    editable = case.status != Case.Status.CLOSED and not case.is_archived
+    return render(
+        request,
+        "cases/documents.html",
+        {
+            "case": case,
+            "form": form,
+            "page": page,
+            "can_manage_documents": editable
+            and case_allows(request.user, Action.MANAGE_DOCUMENTS, case),
+            "can_archive_documents": editable and can_archive_documents(request.user, case),
+            "require_document_scan": settings.DOCUMENT_REQUIRE_SCAN,
+        },
+        status=200 if page is not None else 400,
+    )
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+def document_upload(request, pk):
+    # Validate/scan without holding a case lock, then authorize again before publishing.
+    case = get_object_or_404(cases_visible_to(request.user), pk=pk)
+    if not case_allows(request.user, Action.MANAGE_DOCUMENTS, case):
+        raise PermissionDenied
+    require_editable(case)
+    posting = request.method == "POST"
+    form = DocumentUploadForm(request.POST if posting else None, request.FILES if posting else None)
+    title = "Upload document"
+    context = {
+        "case_record": case,
+        "document_list_url": True,
+        "description": "PDF, DOCX, UTF-8 TXT, JPG, or PNG. Maximum 10 MiB.",
+    }
+    if not posting:
+        return form_response(request, form, title, **context)
+    if form.is_valid():
+        try:
+            scanned_at = scan_upload(form.cleaned_data["file"])
+            publish_document(request, pk, form, scanned_at=scanned_at)
+        except ValidationError as exc:
+            form.add_error("file", exc)
+        except (ScanUnavailable, OSError):
+            form.add_error("file", "The file could not be processed. Try again later.")
+            audit_event(request, "document.upload", "document", result=AuditEvent.Result.FAILURE)
+            return form_response(request, form, title, status=503, **context)
+        else:
+            return redirect("cases:documents", pk=pk)
+    audit_event(request, "document.upload", "document", result=AuditEvent.Result.FAILURE)
+    return form_response(request, form, title, **context)
+
+
+@login_required
+@require_safe
 def document_download(request, pk, document_pk):
-    document = get_object_or_404(documents_visible_to(request.user), case_id=pk, pk=document_pk)
+    documents = documents_visible_to(request.user)
+    if settings.DOCUMENT_REQUIRE_SCAN:
+        documents = documents.filter(malware_scanned_at__isnull=False)
+    document = get_object_or_404(documents, case_id=pk, pk=document_pk)
     try:
         file = document.file.open("rb")
     except FileNotFoundError as exc:
         raise Http404 from exc
-    return FileResponse(
-        file,
-        as_attachment=True,
-        filename=document.original_filename,
-        content_type="application/octet-stream",
-    )
+    try:
+        if request.method == "GET":
+            audit_change(request, "document.download", document)
+        name = document.original_filename
+        response = FileResponse(
+            file,
+            as_attachment=True,
+            filename=name if safe_filename(name) else "document",
+            content_type="application/octet-stream",
+        )
+    except Exception:
+        file.close()
+        raise
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    return response
 
 
 @login_required
@@ -583,10 +683,67 @@ def document_edit(request, pk, document_pk):
     require_editable(case)
     if document.state != Document.State.ACTIVE:
         raise PermissionDenied
-    form = DocumentEditForm(request.POST if request.method == "POST" else None, instance=document)
-    return revision_response(
-        request, form, "Save document details", document, "document.edit", case.pk
+    revision = document.revision
+    posting = request.method == "POST"
+    form = DocumentEditForm(
+        request.POST if posting else None, request.FILES if posting else None, instance=document
     )
+    title = "Save document details"
+    context = {"case_record": case, "document_list_url": True}
+    if form.is_valid():
+        if form.cleaned_data["revision"] != revision:
+            form.add_error(None, "This document has changed. Reload it before saving.")
+            return form_response(request, form, title, status=409, **context)
+        changes = {
+            field: form.cleaned_data[field]
+            for field in ("title", "category", "description")
+            if form.cleaned_data[field] != form.initial[field]
+        }
+        if changes:
+            document.update_with_revision(revision, **changes)
+            audit_change(request, "document.edit", document, changes)
+        return redirect("cases:documents", pk=pk)
+    return form_response(request, form, title, **context)
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def document_archive(request, pk, document_pk):
+    case = case_for_action(request, pk, Action.MANAGE_DOCUMENTS)
+    document = get_object_or_404(documents_visible_to(request.user), case=case, pk=document_pk)
+    if not can_archive_documents(request.user, case):
+        raise PermissionDenied
+    require_editable(case)
+    if document.state == Document.State.ARCHIVED:
+        return HttpResponse("This document is already archived.", status=409)
+    posting = request.method == "POST"
+    form = DocumentArchiveForm(
+        request.POST if posting else None,
+        request.FILES if posting else None,
+        initial={"revision": document.revision},
+    )
+    title = "Archive document"
+    context = {
+        "case_record": case,
+        "document_list_url": True,
+        "description": "Archive this document to keep its file and history in the Archived list.",
+    }
+    if form.is_valid():
+        try:
+            document.update_with_revision(
+                form.cleaned_data["revision"],
+                state=Document.State.ARCHIVED,
+                archived_by=request.user,
+                archived_at=timezone.now(),
+                archive_reason=form.cleaned_data["archive_reason"],
+            )
+        except ConcurrentEditError as exc:
+            form.add_error(None, str(exc))
+            return form_response(request, form, title, status=409, **context)
+        audit_change(request, "document.archive", document, ["state"])
+        return redirect("cases:documents", pk=pk)
+    return form_response(request, form, title, **context)
 
 
 def lock_assignee_membership(case, assignee):

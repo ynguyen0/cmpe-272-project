@@ -104,7 +104,7 @@ user.user_permissions.add(grant)
 | Role | Grant codename | Capability |
 | --- | --- | --- |
 | Staff | `create_case_records` | Create clients and cases |
-| Staff | `manage_case_documents` | Edit document metadata in assigned cases |
+| Staff | `manage_case_documents` | Upload and edit document metadata in assigned cases |
 | Staff | `assign_case_tasks` | Assign and reassign tasks in assigned cases |
 | Administrator | `archive_case` | Archive closed cases with active membership |
 | Administrator | `view_organization_audit` | View organization-wide audit records |
@@ -176,14 +176,15 @@ from the environment. Missing required configuration fails with the variable nam
 For a native PostgreSQL 16 installation, create a dedicated role/database, give the
 local test role `CREATEDB`, and set those variables instead of starting Compose.
 
-Private files default to `private-media/`, with generated storage names and restrictive
-filesystem permissions. They have no public URL, and no development or deployment URL
-route serves them. Future document downloads must use a server-authorized view.
-`static/` contains only public assets, including Bootstrap; never put documents there.
+Private documents default to `private-media/`. Downloads stream through the application
+after checking case access. Uploaded files use generated names and restrictive
+permissions. The public `static/` directory contains only application assets. See
+[document operations](docs/document-operations.md) for ClamAV, backup and restore,
+and cleanup commands.
 
 For deployment, supply a separate strong key, explicit hosts, HTTPS CSRF origins, an
-absolute persistent `DJANGO_PRIVATE_MEDIA_ROOT`, and dedicated database credentials
-from the hosting environment. Configure the `DJANGO_EMAIL_*` settings and
+absolute persistent `DJANGO_PRIVATE_MEDIA_ROOT`, an absolute `DJANGO_CLAMDSCAN_PATH`
+for the local ClamAV daemon, and dedicated database credentials. Configure the `DJANGO_EMAIL_*` settings and
 `DJANGO_DEFAULT_FROM_EMAIL` in `.env.example` for your SMTP relay. If your proxy or
 application server records access logs, redact recovery URLs under `/accounts/reset/`.
 Then run:
@@ -197,7 +198,8 @@ uv run gunicorn config.wsgi:application --bind 127.0.0.1:8000
 
 For the worker command explicitly set `DJANGO_SETTINGS_MODULE=config.settings.deployment`
 in the hosting environment; do not reuse the development `.env`. Configure a trusted
-HTTPS reverse proxy to serve `staticfiles/` only. Do not expose private files. Proxy
+HTTPS reverse proxy to serve `staticfiles/` only. Cap upload request bodies at
+10,551,296 bytes and keep private files outside the webroot. Proxy
 header trust, certificates, database TLS, database/file backups and restore verification
 must be configured for that host. This step prepares settings; it does not deploy a site.
 See [deployment responsibilities](docs/architecture.md#deployment-boundary).

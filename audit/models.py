@@ -23,6 +23,7 @@ AUDIT_CHANGE_FIELDS = [
     "relationship",
     "responsibility",
     "category",
+    "description",
     "state",
     "assignee",
     "priority",
