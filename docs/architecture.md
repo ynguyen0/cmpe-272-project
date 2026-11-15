@@ -59,7 +59,7 @@ Case mutations use server-side role and membership checks, scoped form fields,
 transactions, row locking, and revision checks for updates. Templates use permission
 decisions from the server to display available actions. Users can correct active
 clients they can view. Attorneys and administrators can archive those clients and
-add visible active clients to cases they are assigned to that are open or on hold.
+add visible active clients to their assigned cases in Open, In progress, or On hold.
 Archive keeps every case link, hides the client from active lists and selectors,
 and leaves history accessible under the same policy. The Archived list gives
 authorized users a route back to those records.
@@ -69,9 +69,11 @@ CaseMembership rows with active flags and responsibilities. Case read policies r
 active membership; authorized archived reads preserve access to history. A Document,
 Task, or Deadline belongs to exactly one Case. Tasks reference one assignee. Creator,
 uploader, assignee, and audit-actor foreign keys protect referenced users from deletion.
-Case-linked records use protected foreign keys. Lifecycle rules (minimum attorney,
-closure blockers, archive behavior, and no hard-delete interfaces) still require the
-backlog's service implementation; ordinary ORM access is trusted internal code. Composite
+Case-linked records use protected foreign keys. Case creation saves the case, client
+links, team and audit event in one transaction. Team and status changes use the case
+revision and retain membership and work history. Closure lists unfinished tasks and
+pending deadlines, including archived work. Authorized users can read closed and
+archived case workspaces and download their documents. Composite
 PostgreSQL FKs prevent responsible attorneys/task assignees/deadline owners from referring
 to another case's team. An atomic revision helper detects stale updates; all future
 feature mutations must use that helper and authorized transactional services.

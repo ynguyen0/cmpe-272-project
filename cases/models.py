@@ -9,6 +9,7 @@ from config.models import RevisionedModel, enum_check, nonblank_check, revision_
 class Case(RevisionedModel):
     class Status(models.TextChoices):
         OPEN = "Open"
+        IN_PROGRESS = "In progress"
         ON_HOLD = "On hold"
         CLOSED = "Closed"
 
@@ -24,7 +25,7 @@ class Case(RevisionedModel):
     title = models.CharField(max_length=200)
     type = models.CharField(max_length=15, choices=Type.choices, default=Type.OTHER)
     summary = models.CharField(max_length=2000, blank=True)
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.OPEN)
     clients = models.ManyToManyField("clients.Client", through="CaseClient", related_name="cases")
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL, through="CaseMembership", related_name="cases"
@@ -58,7 +59,7 @@ class Case(RevisionedModel):
             nonblank_check("number"),
             nonblank_check("title"),
             enum_check("type", ["Civil", "Criminal", "Family", "Corporate", "Other"]),
-            enum_check("status", ["Open", "On hold", "Closed"]),
+            enum_check("status", ["Open", "In progress", "On hold", "Closed"]),
             models.CheckConstraint(
                 condition=Q(closed_on__isnull=True) | Q(closed_on__gte=F("opened_on")),
                 name="case_dates_ordered",

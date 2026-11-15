@@ -1,4 +1,5 @@
 from django import forms
+from django.utils import timezone
 
 from accounts.models import User
 from clients.models import Client
@@ -63,9 +64,24 @@ class ClientSearchForm(StrictFields, forms.Form):
     page = forms.IntegerField(required=False, min_value=1)
 
 
-class ClientChoiceField(forms.ModelChoiceField):
+class ClientLabel:
     def label_from_instance(self, client):
         return f"{client.name} (#{client.pk})"
+
+
+class ClientChoiceField(ClientLabel, forms.ModelChoiceField):
+    pass
+
+
+class MultipleCaseChoices(forms.ModelMultipleChoiceField):
+    def clean(self, value):
+        if isinstance(value, (list, tuple)) and len(set(value)) != len(value):
+            raise forms.ValidationError("Select each record only once.")
+        return super().clean(value)
+
+
+class ClientMultipleChoiceField(ClientLabel, MultipleCaseChoices):
+    pass
 
 
 def active_client_choices(actor):
@@ -82,37 +98,158 @@ class CaseClientForm(StrictFields, forms.Form):
         )
 
 
-class CaseCreationForm(StrictFields, forms.ModelForm):
+class CaseSearchForm(StrictFields, forms.Form):
+    ORDERINGS = {
+        "number": ("number",),
+        "title": ("title", "number"),
+        "recent": ("-opened_on", "number"),
+        "oldest": ("opened_on", "number"),
+    }
+    q = forms.CharField(
+        required=False,
+        max_length=200,
+        label="Search cases",
+        widget=forms.TextInput(attrs={"type": "search"}),
+    )
+    status = forms.ChoiceField(
+        required=False,
+        choices=[("", "All unarchived statuses"), *Case.Status.choices, ("archived", "Archived")],
+    )
+    type = forms.ChoiceField(required=False, choices=[("", "All types"), *Case.Type.choices])
+    sort = forms.ChoiceField(
+        required=False,
+        choices=[
+            ("number", "Case reference"),
+            ("title", "Title"),
+            ("recent", "Newest opened"),
+            ("oldest", "Oldest opened"),
+        ],
+        initial="number",
+    )
+    page = forms.IntegerField(required=False, min_value=1)
+
+
+def active_users_with_role(role):
+    return User.objects.filter(is_active=True, role=role).order_by("full_name", "pk")
+
+
+def opened_date_field():
+    return forms.DateField(
+        required=False,
+        input_formats=["%Y-%m-%d"],
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+    )
+
+
+class CaseDateValidation:
+    def clean_opened_on(self):
+        date = self.cleaned_data["opened_on"] or self.initial.get("opened_on", timezone.localdate())
+        if date > timezone.localdate():
+            raise forms.ValidationError("The opened date cannot be in the future.")
+        return date
+
+
+class CaseCreationForm(StrictFields, CaseDateValidation, forms.ModelForm):
     client = ClientChoiceField(queryset=Client.objects.none())
+    additional_clients = ClientMultipleChoiceField(
+        queryset=Client.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
     responsible_attorney = forms.ModelChoiceField(queryset=User.objects.none())
+    assigned_staff = MultipleCaseChoices(
+        queryset=User.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    opened_on = opened_date_field()
 
     class Meta:
         model = Case
+        labels = {"summary": "Description"}
         fields = (
             "title",
             "type",
             "court_docket_number",
             "summary",
+            "opened_on",
             "client",
+            "additional_clients",
             "responsible_attorney",
+            "assigned_staff",
         )
 
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["client"].queryset = active_client_choices(actor)
-        self.fields["responsible_attorney"].queryset = User.objects.filter(
-            is_active=True, role=User.Role.ATTORNEY
-        ).order_by("full_name", "pk")
+        clients = active_client_choices(actor)
+        self.fields["client"].queryset = clients
+        self.fields["additional_clients"].queryset = clients
+        self.fields["assigned_staff"].queryset = active_users_with_role(User.Role.STAFF)
+        self.fields["responsible_attorney"].queryset = active_users_with_role(User.Role.ATTORNEY)
+        self.initial.setdefault("opened_on", timezone.localdate())
         if actor.role == User.Role.ATTORNEY:
             self.initial.setdefault("responsible_attorney", actor.pk)
 
+    def clean_additional_clients(self):
+        additional = self.cleaned_data["additional_clients"]
+        primary = self.cleaned_data.get("client")
+        if primary and any(client.pk == primary.pk for client in additional):
+            raise forms.ValidationError("Select each client only once.")
+        return additional
 
-class CaseEditForm(StrictFields, forms.ModelForm):
+
+class CaseTeamForm(RevisionForm):
+    responsible_attorney = forms.ModelChoiceField(queryset=User.objects.none())
+    assigned_staff = MultipleCaseChoices(
+        queryset=User.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Select everyone who should have staff access to this case.",
+    )
+
+    def __init__(self, *args, case, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["responsible_attorney"].queryset = active_users_with_role(User.Role.ATTORNEY)
+        staff = active_users_with_role(User.Role.STAFF)
+        self.fields["assigned_staff"].queryset = staff
+        self.initial.update(
+            revision=case.revision,
+            responsible_attorney=case.responsible_attorney_id,
+            assigned_staff=staff.filter(
+                memberships__case=case,
+                memberships__is_active=True,
+            ).exclude(pk=case.responsible_attorney_id),
+        )
+
+
+class CaseStatusForm(RevisionForm):
+    status = forms.ChoiceField(label="New status")
+    responsible_attorney = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        required=False,
+        label="Replacement responsible attorney",
+    )
+
+    def __init__(self, *args, case, targets, replacements=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initial["revision"] = case.revision
+        self.fields["status"].choices = [(status, status.label) for status in targets]
+        if case.status == Case.Status.CLOSED:
+            self.initial["status"] = Case.Status.OPEN
+        if replacements is None:
+            del self.fields["responsible_attorney"]
+        else:
+            self.fields["responsible_attorney"].queryset = replacements
+
+
+class CaseEditForm(StrictFields, CaseDateValidation, forms.ModelForm):
     revision = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+    opened_on = opened_date_field()
 
     class Meta:
         model = Case
-        fields = ("title", "type", "court_docket_number", "summary", "revision")
+        labels = {"summary": "Description"}
+        fields = ("title", "type", "court_docket_number", "summary", "opened_on", "revision")
 
     def __init__(self, *args, editable_fields, **kwargs):
         super().__init__(*args, **kwargs)

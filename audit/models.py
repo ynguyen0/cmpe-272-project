@@ -15,6 +15,7 @@ AUDIT_CHANGE_FIELDS = [
     "title",
     "type",
     "summary",
+    "court_docket_number",
     "status",
     "responsible_attorney",
     "opened_on",

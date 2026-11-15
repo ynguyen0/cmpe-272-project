@@ -7,7 +7,16 @@
     <p>{{ target.full_name }} · {{ target.email }}</p>
   {% endif %}
   {% if client_record %}<p>Client #{{ client_record.pk }}</p>{% endif %}
+  {% if case_record %}<p>{{ case_record.number }} · {{ case_record.title }}</p>{% endif %}
   {% if description %}<p>{{ description }}</p>{% endif %}
+  {% if blocking_tasks %}
+    <h2 class="h5">Unfinished tasks</h2>
+    <ul>{% for task in blocking_tasks %}<li>{{ task.title }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if blocking_deadlines %}
+    <h2 class="h5">Pending deadlines</h2>
+    <ul>{% for deadline in blocking_deadlines %}<li>{{ deadline.title }}</li>{% endfor %}</ul>
+  {% endif %}
   {% if matches %}
     <div class="alert alert-warning" role="alert">
       <p>Possible duplicates based on similar names or matching contact information:</p>
@@ -22,7 +31,7 @@
   {% if client_record %}
     <p class="mt-3"><a href="{% url 'cases:client_detail' client_record.pk %}">Back to client details</a></p>
   {% elif case_record %}
-    <p class="mt-3"><a href="{% url 'cases:detail' case_record.pk %}">Back to case</a></p>
+    <p class="mt-3"><a href="{% url 'cases:detail' case_record.pk %}">Return to current case</a></p>
   {% endif %}
   {% if target %}
     <p class="mt-3">

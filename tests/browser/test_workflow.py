@@ -88,3 +88,39 @@ class ClientWorkflowTests(StaticLiveServerTestCase):
             expect(page.get_by_text("Archived", exact=True)).to_be_visible()
             expect(page.get_by_role("link", name="DEMO-ALPHA")).to_be_visible()
             browser.close()
+
+
+class CaseWorkflowTests(StaticLiveServerTestCase):
+    def test_create_assign_team_and_close_in_browser(self):
+        password = "Fictional-browser-passphrase-73!"
+        with patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": password}):
+            call_command("seed_demo", stdout=StringIO())
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            page.goto(self.live_server_url)
+            page.get_by_label("Email", exact=True).fill("attorney.a@example.test")
+            page.get_by_label("Password", exact=True).fill(password)
+            page.get_by_role("button", name="Sign in", exact=True).click()
+            page.get_by_role("link", name="Create case").click()
+            title = "Fictional Observatory matter"
+            page.get_by_label("Title", exact=True).fill(title)
+            page.get_by_label("Description", exact=True).fill("Fictional case description")
+            client = page.get_by_role("option", name="Fictional Avery Lane").inner_text()
+            page.get_by_label("Client", exact=True).select_option(label=client)
+            page.get_by_role("button", name="Create case", exact=True).click()
+            expect(page.get_by_role("heading", name=title)).to_be_visible()
+            page.get_by_role("link", name="Edit case team").click()
+            page.get_by_label("Staff A", exact=True).check()
+            page.get_by_role("button", name="Save case team").click()
+            expect(page.get_by_text("Staff A · Support")).to_be_visible()
+            for status in ("In progress", "On hold", "Closed"):
+                page.get_by_role("link", name="Update case status").click()
+                page.get_by_label("New status").select_option(value=status)
+                page.get_by_role("button", name="Update case status").click()
+                expect(page.locator("dd").filter(has_text=status)).to_be_visible()
+            expect(page.get_by_role("link", name="Fictional Avery Lane")).to_be_visible()
+            expect(page.get_by_text("Fictional case description")).to_be_visible()
+            expect(page.get_by_role("link", name="Reopen case")).to_be_visible()
+            browser.close()

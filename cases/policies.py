@@ -77,12 +77,16 @@ def can_archive_clients(user):
     }
 
 
-def can_link_clients(user, case):
+def can_manage_case(user, case):
     return (
         user.is_authenticated
         and user.role in {Role.ADMINISTRATOR, Role.ATTORNEY}
         and case_allows(user, Action.EDIT_CASE, case)
     )
+
+
+def can_link_clients(user, case):
+    return can_manage_case(user, case)
 
 
 def documents_visible_to(user):
@@ -129,7 +133,7 @@ def editable_case_fields(user, case):
         return ()
     if user.role == Role.STAFF:
         return ("summary", "court_docket_number")
-    return ("title", "type", "summary", "court_docket_number")
+    return ("title", "type", "summary", "court_docket_number", "opened_on")
 
 
 def can_complete_task(user, task):

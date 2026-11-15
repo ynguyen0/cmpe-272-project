@@ -15,6 +15,8 @@ urlpatterns = [
     path("cases/<int:pk>/", views.detail, name="detail"),
     path("cases/<int:pk>/clients/link/", views.case_link_client, name="link_client"),
     path("cases/<int:pk>/edit/", views.case_edit, name="edit"),
+    path("cases/<int:pk>/team/", views.case_team, name="team"),
+    path("cases/<int:pk>/status/", views.case_status, name="status"),
     path("cases/<int:pk>/archive/", views.case_archive, name="archive"),
     path(
         "cases/<int:pk>/documents/<int:document_pk>/download/",

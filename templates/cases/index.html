@@ -14,20 +14,43 @@
   {% endfor %}
 </dl>
 <form method="get" class="mb-3">
-  <label for="case-search">Search cases</label>
-  <input id="case-search" type="search" name="q" value="{{ query }}" maxlength="200">
-  <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+  {{ form.non_field_errors }}
+  <div class="d-flex flex-wrap align-items-end gap-3">
+    <div>{{ form.q.label_tag }} {{ form.q }} {{ form.q.errors }}</div>
+    <div>{{ form.status.label_tag }} {{ form.status }} {{ form.status.errors }}</div>
+    <div>{{ form.type.label_tag }} {{ form.type }} {{ form.type.errors }}</div>
+    <div>{{ form.sort.label_tag }} {{ form.sort }} {{ form.sort.errors }}</div>
+    <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+  </div>
+  {{ form.page.errors }}
 </form>
-<div class="table-responsive">
-  <table class="table table-striped bg-white">
-    <caption>Cases you are authorized to view</caption>
-    <thead><tr><th scope="col">Number</th><th scope="col">Title</th><th scope="col">Status</th></tr></thead>
-    <tbody>
-    {% for case in cases %}
-      <tr><td><a href="{% url 'cases:detail' case.pk %}">{{ case.number }}</a></td><td>{{ case.title }}</td><td>{% if case.is_archived %}Archived{% else %}{{ case.status }}{% endif %}</td></tr>
-    {% empty %}<tr><td colspan="3">{% if query %}No matching cases.{% else %}No cases are assigned to you.{% endif %}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+{% if page is not None %}
+  <div class="table-responsive">
+    <table class="table table-striped bg-white">
+      <caption>Cases you are authorized to view</caption>
+      <thead><tr>
+        <th scope="col">Reference</th><th scope="col">Title</th><th scope="col">Type</th>
+        <th scope="col">Status</th><th scope="col">Opened</th>
+      </tr></thead>
+      <tbody>
+      {% for case in page %}
+        <tr>
+          <td><a href="{% url 'cases:detail' case.pk %}">{{ case.number }}</a></td>
+          <td>{{ case.title }}</td><td>{{ case.type }}</td>
+          <td>{% if case.is_archived %}Archived{% else %}{{ case.status }}{% endif %}</td>
+          <td>{{ case.opened_on|date:"Y-m-d" }}</td>
+        </tr>
+      {% empty %}<tr><td colspan="5">No matching cases.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.has_other_pages %}
+    <nav aria-label="Case results pages" class="d-flex gap-3">
+      {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}">Previous</a>{% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+{% endif %}
 {% endblock %}

@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_safe
 
+from accounts.models import User
 from clients.models import Client
 from clients.search import possible_duplicates, search_clients
 from config.models import ConcurrentEditError
@@ -19,6 +20,9 @@ from .forms import (
     CaseClientForm,
     CaseCreationForm,
     CaseEditForm,
+    CaseSearchForm,
+    CaseStatusForm,
+    CaseTeamForm,
     ClientEditForm,
     ClientForm,
     ClientSearchForm,
@@ -26,6 +30,7 @@ from .forms import (
     RevisionForm,
     TaskAssignmentForm,
     TaskReassignmentForm,
+    active_users_with_role,
 )
 from .models import Case, CaseMembership
 from .policies import (
@@ -34,6 +39,7 @@ from .policies import (
     can_archive_clients,
     can_complete_task,
     can_link_clients,
+    can_manage_case,
     case_allows,
     cases_visible_to,
     clients_visible_to,
@@ -44,14 +50,18 @@ from .policies import (
     tasks_visible_to,
 )
 from .services import (
+    CASE_TRANSITIONS,
     audit_change,
     audit_event,
     case_for_action,
+    change_case_status,
     create_case,
     link_client,
     lock_actor,
     lock_visible_client,
+    outstanding_work,
     require_editable,
+    update_case_team,
 )
 
 FORM_METHODS = ["GET", "HEAD", "POST"]
@@ -62,10 +72,30 @@ FORM_METHODS = ["GET", "HEAD", "POST"]
 def index(request):
     user = request.user
     cases = cases_visible_to(user)
-    query = request.GET.get("q", "").strip()[:200]
-    results = (
-        cases.filter(Q(number__icontains=query) | Q(title__icontains=query)) if query else cases
-    )
+    form = CaseSearchForm(request.GET)
+    page = None
+    if form.is_valid():
+        data = form.cleaned_data
+        results = cases.filter(is_archived=data["status"] == "archived")
+        if data["status"] and data["status"] != "archived":
+            results = results.filter(status=data["status"])
+        if data["type"]:
+            results = results.filter(type=data["type"])
+        if query := data["q"]:
+            results = results.filter(
+                Q(number__icontains=query)
+                | Q(title__icontains=query)
+                | Q(court_docket_number__icontains=query)
+            )
+        ordered = results.order_by(*CaseSearchForm.ORDERINGS[data["sort"] or "number"])
+        paginator = Paginator(ordered, 25)
+        number = data["page"] or 1
+        if number > paginator.num_pages:
+            form.add_error("page", "This page does not exist.")
+        else:
+            page = paginator.page(number)
+            if request.method == "GET":
+                audit_event(request, "case.search" if query else "case.list", "case")
     totals = {
         "Cases": cases.filter(is_archived=False).count(),
         "Clients": clients_visible_to(user).filter(status=Client.Status.ACTIVE).count(),
@@ -73,26 +103,33 @@ def index(request):
         "Tasks": tasks_visible_to(user).filter(is_archived=False).count(),
         "Deadlines": deadlines_visible_to(user).filter(is_archived=False).count(),
     }
-    return render(
+    response = render(
         request,
         "cases/index.html",
         {
-            "cases": results,
+            "form": form,
+            "page": page,
             "totals": totals,
-            "query": query,
             "can_create": has_capability(user, Action.CREATE_RECORDS),
             "can_view_audit": has_capability(user, Action.VIEW_AUDIT),
         },
+        status=200 if page is not None else 400,
     )
+    # Keep search terms out of referrers while preserving the origin for CSRF checks.
+    response["Referrer-Policy"] = "origin"
+    return response
 
 
 @login_required
 @require_safe
 def detail(request, pk):
     user = request.user
-    case = get_object_or_404(cases_visible_to(user), pk=pk)
+    case = get_object_or_404(cases_visible_to(user).select_related("responsible_attorney"), pk=pk)
+    if request.method == "GET":
+        audit_change(request, "case.view", case)
     editable = case.status != Case.Status.CLOSED and not case.is_archived
-    tasks = tasks_visible_to(user).filter(case=case, is_archived=False)
+    tasks = tasks_visible_to(user).filter(case=case)
+    can_manage = can_manage_case(user, case)
     can_assign = editable and case_allows(user, Action.ASSIGN_TASKS, case)
     can_complete = editable and has_capability(user, Action.COMPLETE_TASK)
     return render(
@@ -103,18 +140,28 @@ def detail(request, pk):
             "clients": clients_visible_to(user).filter(
                 case_links__case=case, case_links__is_active=True
             ),
+            "team": case.memberships.filter(is_active=True)
+            .select_related("user")
+            .order_by("user__full_name", "pk"),
             "documents": documents_visible_to(user).filter(case=case).order_by("state", "title"),
+            "deadlines": deadlines_visible_to(user)
+            .filter(case=case)
+            .select_related("responsible_user")
+            .order_by("due_at", "pk"),
             "task_rows": [
                 (
                     task,
                     can_complete
+                    and not task.is_archived
                     and task.assignee_id == user.pk
                     and task.status != Task.Status.DONE,
                 )
                 for task in tasks.select_related("assignee").order_by("due_at", "pk")
             ],
             "can_edit": editable and case_allows(user, Action.EDIT_CASE, case),
-            "can_link_clients": editable and can_link_clients(user, case),
+            "can_link_clients": editable and can_manage,
+            "can_manage_team": editable and can_manage,
+            "can_change_status": not case.is_archived and can_manage,
             "can_manage_documents": editable and case_allows(user, Action.MANAGE_DOCUMENTS, case),
             "can_assign": can_assign,
             "can_archive": case.status == Case.Status.CLOSED
@@ -153,7 +200,8 @@ def client_index(request):
         },
         status=200 if page is not None else 400,
     )
-    response["Referrer-Policy"] = "no-referrer"
+    # Keep search terms out of referrers while preserving the origin for CSRF checks.
+    response["Referrer-Policy"] = "origin"
     return response
 
 
@@ -205,6 +253,7 @@ def form_response(request, form, title, *, status=None, **context):
 
 
 def revision_response(request, form, title, record, action, case_id, *, fixed_changes=None):
+    context = {"case_record": record} if isinstance(record, Case) else {}
     if form.is_valid():
         changes = (
             fixed_changes
@@ -215,10 +264,10 @@ def revision_response(request, form, title, record, action, case_id, *, fixed_ch
             record.update_with_revision(form.cleaned_data["revision"], **changes)
         except ConcurrentEditError as exc:
             form.add_error(None, str(exc))
-            return form_response(request, form, title, status=409)
+            return form_response(request, form, title, status=409, **context)
         audit_change(request, action, record, changes)
         return redirect("cases:detail", pk=case_id)
-    return form_response(request, form, title)
+    return form_response(request, form, title, **context)
 
 
 def duplicate_warning(actor, form, client=None):
@@ -356,10 +405,22 @@ def case_create(request):
         raise PermissionDenied
     form = CaseCreationForm(request.POST if request.method == "POST" else None, actor=user)
     if form.is_valid():
-        case = create_case(form, user)
-        audit_change(request, "case.create", case)
+        try:
+            case = create_case(form, user)
+        except ConcurrentEditError as exc:
+            form.add_error(None, str(exc))
+            return form_response(request, form, "Create case", status=409)
+        audit_change(request, "case.create", case, ["clients", "members", "responsible_attorney"])
         return redirect("cases:detail", pk=case.pk)
     return form_response(request, form, "Create case")
+
+
+def stale_case_form(form, revision):
+    submitted = form.cleaned_data.get("revision")
+    if submitted is not None and submitted != revision:
+        form.add_error(None, "This case has changed. Reload it before saving.")
+        return True
+    return False
 
 
 @login_required
@@ -367,13 +428,113 @@ def case_create(request):
 @transaction.atomic
 def case_edit(request, pk):
     case = case_for_action(request, pk, Action.EDIT_CASE)
-    require_editable(case)
+    revision = case.revision
     form = CaseEditForm(
         request.POST if request.method == "POST" else None,
         instance=case,
         editable_fields=editable_case_fields(request.user, case),
     )
-    return revision_response(request, form, "Save case details", case, "case.edit", case.pk)
+    title = "Save case details"
+    valid = form.is_valid()
+    if request.method == "POST" and stale_case_form(form, revision):
+        return form_response(request, form, title, status=409, case_record=case)
+    require_editable(case)
+    if valid:
+        changes = {
+            field: form.cleaned_data[field]
+            for field in form.fields
+            if field != "revision" and form.cleaned_data[field] != form.initial[field]
+        }
+        if changes:
+            case.update_with_revision(revision, **changes)
+            audit_change(request, "case.edit", case, changes)
+        return redirect("cases:detail", pk=pk)
+    return form_response(request, form, title, case_record=case)
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def case_team(request, pk):
+    case = case_for_action(request, pk, Action.EDIT_CASE)
+    if not can_manage_case(request.user, case):
+        raise PermissionDenied
+    title = "Save case team"
+    form = CaseTeamForm(request.POST if request.method == "POST" else None, case=case)
+    valid = form.is_valid()
+    if request.method == "POST" and stale_case_form(form, case.revision):
+        return form_response(request, form, title, status=409, case_record=case)
+    require_editable(case)
+    if valid:
+        try:
+            fields = update_case_team(case, form.cleaned_data)
+        except (ValidationError, ConcurrentEditError) as exc:
+            form.add_error(None, str(exc) if isinstance(exc, ConcurrentEditError) else exc)
+            return form_response(request, form, title, status=409, case_record=case)
+        if fields:
+            audit_change(request, "case.team", case, fields)
+        return redirect("cases:detail", pk=pk)
+    return form_response(request, form, title, case_record=case)
+
+
+def reopening_attorney_choices(case, user):
+    if case.status != Case.Status.CLOSED:
+        return None
+    attorneys = active_users_with_role(User.Role.ATTORNEY)
+    assigned = attorneys.filter(memberships__case=case, memberships__is_active=True)
+    if assigned.filter(pk=case.responsible_attorney_id).exists():
+        return None
+    return attorneys if user.role == User.Role.ADMINISTRATOR else assigned
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def case_status(request, pk):
+    case = case_for_action(request, pk, Action.EDIT_CASE)
+    if not can_manage_case(request.user, case) or case.is_archived:
+        raise PermissionDenied
+    reopening = case.status == Case.Status.CLOSED
+    title = "Reopen case" if reopening else "Update case status"
+    context = {"case_record": case}
+    form = CaseStatusForm(
+        request.POST if request.method == "POST" else None,
+        case=case,
+        targets=CASE_TRANSITIONS[case.status],
+        replacements=reopening_attorney_choices(case, request.user),
+    )
+    valid = form.is_valid()
+    if request.method == "POST" and stale_case_form(form, case.revision):
+        return form_response(request, form, title, status=409, **context)
+    if valid:
+        status = form.cleaned_data["status"]
+        if status == Case.Status.CLOSED:
+            tasks, deadlines = map(list, outstanding_work(case))
+            if tasks or deadlines:
+                form.add_error(None, "Resolve these tasks and deadlines before closing the case.")
+                return form_response(
+                    request,
+                    form,
+                    title,
+                    status=409,
+                    blocking_tasks=tasks,
+                    blocking_deadlines=deadlines,
+                    **context,
+                )
+        try:
+            fields = change_case_status(case, form.cleaned_data)
+        except (ValidationError, ConcurrentEditError) as exc:
+            form.add_error(None, str(exc) if isinstance(exc, ConcurrentEditError) else exc)
+            return form_response(request, form, title, status=409, **context)
+        action = {
+            Case.Status.OPEN: "case.reopen" if reopening else "case.resume",
+            Case.Status.IN_PROGRESS: "case.in_progress",
+            Case.Status.ON_HOLD: "case.on_hold",
+            Case.Status.CLOSED: "case.close",
+        }[status]
+        audit_change(request, action, case, fields)
+        return redirect("cases:detail", pk=pk)
+    return form_response(request, form, title, **context)
 
 
 @login_required
