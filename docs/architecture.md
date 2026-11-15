@@ -44,6 +44,11 @@ Views use the filtered querysets in `cases.policies` for record reads. Case deta
 lookup returns 404 for nonexistent and unassigned IDs. A linked client is visible
 through an active link to an assigned case. Shared-client pages show only the
 viewer's assigned cases. Active membership is required for administrators as well.
+A client that has never been linked is private to its creator. Inactive historical
+links do not restore intake access. Client search and duplicate warnings use the
+same client scope as detail pages; all roles with client read access can search the
+name, ID, email, and phone. Search terms and contact values are omitted from audit
+events. Deployment access logs should omit query strings for authenticated routes.
 Django's session authentication rejects inactive users.
 Account deactivation also increments the account's session version, invalidating prior
 sessions and recovery links after reactivation. PostgreSQL serializes sign-in attempts
@@ -52,7 +57,12 @@ commit in the same transaction.
 
 Case mutations use server-side role and membership checks, scoped form fields,
 transactions, row locking, and revision checks for updates. Templates use permission
-decisions from the server to display available actions.
+decisions from the server to display available actions. Users can correct active
+clients they can view. Attorneys and administrators can archive those clients and
+add visible active clients to cases they are assigned to that are open or on hold.
+Archive keeps every case link, hides the client from active lists and selectors,
+and leaves history accessible under the same policy. The Archived list gives
+authorized users a route back to those records.
 
 Relationships: Client ↔ Case uses explicit CaseClient links; User ↔ Case uses explicit
 CaseMembership rows with active flags and responsibilities. Case read policies require

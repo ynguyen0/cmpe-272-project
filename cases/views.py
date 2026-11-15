@@ -1,5 +1,6 @@
+from django import forms
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
@@ -8,14 +9,19 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_safe
 
+from clients.models import Client
+from clients.search import possible_duplicates, search_clients
 from config.models import ConcurrentEditError
 from documents.models import Document
 from work.models import Task
 
 from .forms import (
+    CaseClientForm,
     CaseCreationForm,
     CaseEditForm,
-    ClientCreationForm,
+    ClientEditForm,
+    ClientForm,
+    ClientSearchForm,
     DocumentEditForm,
     RevisionForm,
     TaskAssignmentForm,
@@ -25,7 +31,9 @@ from .models import Case, CaseMembership
 from .policies import (
     Action,
     audit_events_visible_to,
+    can_archive_clients,
     can_complete_task,
+    can_link_clients,
     case_allows,
     cases_visible_to,
     clients_visible_to,
@@ -35,7 +43,16 @@ from .policies import (
     has_capability,
     tasks_visible_to,
 )
-from .services import audit_change, case_for_action, create_case, lock_actor, require_editable
+from .services import (
+    audit_change,
+    audit_event,
+    case_for_action,
+    create_case,
+    link_client,
+    lock_actor,
+    lock_visible_client,
+    require_editable,
+)
 
 FORM_METHODS = ["GET", "HEAD", "POST"]
 
@@ -51,7 +68,7 @@ def index(request):
     )
     totals = {
         "Cases": cases.filter(is_archived=False).count(),
-        "Clients": clients_visible_to(user).count(),
+        "Clients": clients_visible_to(user).filter(status=Client.Status.ACTIVE).count(),
         "Documents": documents_visible_to(user).filter(state=Document.State.ACTIVE).count(),
         "Tasks": tasks_visible_to(user).filter(is_archived=False).count(),
         "Deadlines": deadlines_visible_to(user).filter(is_archived=False).count(),
@@ -97,6 +114,7 @@ def detail(request, pk):
                 for task in tasks.select_related("assignee").order_by("due_at", "pk")
             ],
             "can_edit": editable and case_allows(user, Action.EDIT_CASE, case),
+            "can_link_clients": editable and can_link_clients(user, case),
             "can_manage_documents": editable and case_allows(user, Action.MANAGE_DOCUMENTS, case),
             "can_assign": can_assign,
             "can_archive": case.status == Case.Status.CLOSED
@@ -109,29 +127,58 @@ def detail(request, pk):
 @login_required
 @require_safe
 def client_index(request):
-    query = request.GET.get("q", "").strip()[:200]
-    clients = clients_visible_to(request.user).order_by("name", "pk")
-    if query:
-        clients = clients.filter(name__icontains=query)
-    return render(
+    form = ClientSearchForm(request.GET)
+    page = None
+    if form.is_valid():
+        data = form.cleaned_data
+        clients = clients_visible_to(request.user).filter(
+            status=data["status"] or Client.Status.ACTIVE
+        )
+        clients = search_clients(clients, data["q"]).order_by("name", "pk")
+        paginator = Paginator(clients, 25)
+        number = data["page"] or 1
+        if number > paginator.num_pages:
+            form.add_error("page", "This page does not exist.")
+        else:
+            page = paginator.page(number)
+    if page is not None and request.method == "GET":
+        audit_event(request, "client.search" if form.cleaned_data["q"] else "client.list", "client")
+    response = render(
         request,
         "cases/clients.html",
         {
-            "clients": clients,
-            "query": query,
+            "form": form,
+            "page": page,
             "can_create": has_capability(request.user, Action.CREATE_RECORDS),
         },
+        status=200 if page is not None else 400,
     )
+    response["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 @login_required
 @require_safe
 def client_detail(request, pk):
     client = get_object_or_404(clients_visible_to(request.user), pk=pk)
-    cases = cases_visible_to(request.user).filter(
-        client_links__client=client, client_links__is_active=True
+    cases = (
+        cases_visible_to(request.user)
+        .filter(client_links__client=client, client_links__is_active=True)
+        .order_by("number", "pk")
     )
-    return render(request, "cases/client_detail.html", {"client_record": client, "cases": cases})
+    if request.method == "GET":
+        audit_change(request, "client.view", client)
+    active = client.status == Client.Status.ACTIVE
+    return render(
+        request,
+        "cases/client_detail.html",
+        {
+            "client_record": client,
+            "cases": cases,
+            "can_edit": active,
+            "can_archive": active and can_archive_clients(request.user),
+        },
+    )
 
 
 @login_required
@@ -143,7 +190,7 @@ def audit_index(request):
     return render(request, "cases/audit.html", {"page": page.get_page(request.GET.get("page"))})
 
 
-def form_response(request, form, title, *, status=None):
+def form_response(request, form, title, *, status=None, **context):
     return render(
         request,
         "accounts/form.html",
@@ -151,6 +198,7 @@ def form_response(request, form, title, *, status=None):
             "form": form,
             "title": title,
             "submit_label": title,
+            **context,
         },
         status=status or (400 if request.method == "POST" else 200),
     )
@@ -173,6 +221,17 @@ def revision_response(request, form, title, record, action, case_id, *, fixed_ch
     return form_response(request, form, title)
 
 
+def duplicate_warning(actor, form, client=None):
+    if form.cleaned_data["confirm_duplicate"]:
+        return []
+    matches = possible_duplicates(
+        clients_visible_to(actor), form.cleaned_data, exclude_pk=client.pk if client else None
+    )
+    if matches:
+        form.fields["confirm_duplicate"].widget = forms.CheckboxInput()
+    return matches
+
+
 @login_required
 @require_http_methods(FORM_METHODS)
 @transaction.atomic
@@ -180,14 +239,112 @@ def client_create(request):
     user = lock_actor(request)
     if not has_capability(user, Action.CREATE_RECORDS):
         raise PermissionDenied
-    form = ClientCreationForm(request.POST if request.method == "POST" else None)
+    form = ClientForm(request.POST if request.method == "POST" else None)
     if form.is_valid():
+        matches = duplicate_warning(user, form)
+        if matches:
+            return form_response(request, form, "Create client", matches=matches, status=200)
         client = form.save(commit=False)
         client.created_by = user
         client.save()
         audit_change(request, "client.create", client)
         return redirect("cases:client_detail", pk=client.pk)
     return form_response(request, form, "Create client")
+
+
+def client_for_request(request, pk):
+    if request.method == "POST":
+        return lock_visible_client(lock_actor(request), pk)
+    return get_object_or_404(clients_visible_to(request.user), pk=pk)
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def client_edit(request, pk):
+    client = client_for_request(request, pk)
+    if client.status == Client.Status.ARCHIVED:
+        raise PermissionDenied
+    title = "Save client details"
+    context = {"client_record": client}
+    form = ClientEditForm(
+        request.POST if request.method == "POST" else None,
+        instance=client,
+        initial={"revision": client.revision},
+    )
+    if request.method == "GET":
+        audit_change(request, "client.view", client)
+    if form.is_valid():
+        if form.cleaned_data["revision"] != client.revision:
+            form.add_error(None, "This record has changed. Reload it before saving.")
+            return form_response(request, form, title, status=409, **context)
+        changes = {
+            field: form.cleaned_data[field]
+            for field in form.Meta.fields
+            if form.cleaned_data[field] != form.initial[field]
+        }
+        if changes.keys() & {"name", "email", "phone"}:
+            matches = duplicate_warning(request.user, form, client)
+            if matches:
+                return form_response(request, form, title, matches=matches, status=200, **context)
+        if changes:
+            client.update_with_revision(form.cleaned_data["revision"], **changes)
+            audit_change(request, "client.edit", client, changes)
+        return redirect("cases:client_detail", pk=pk)
+    return form_response(request, form, title, **context)
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def client_archive(request, pk):
+    client = client_for_request(request, pk)
+    if not can_archive_clients(request.user):
+        raise PermissionDenied
+    if client.status == Client.Status.ARCHIVED:
+        return HttpResponse("This client is already archived.", status=409)
+    form = RevisionForm(
+        request.POST if request.method == "POST" else None, initial={"revision": client.revision}
+    )
+    title = "Archive client"
+    context = {
+        "client_record": client,
+        "description": "Archiving removes the client from active lists and case selectors. "
+        "Existing case links are retained.",
+    }
+    if form.is_valid():
+        try:
+            client.update_with_revision(
+                form.cleaned_data["revision"], status=Client.Status.ARCHIVED
+            )
+        except ConcurrentEditError as exc:
+            form.add_error(None, str(exc))
+            return form_response(request, form, title, status=409, **context)
+        audit_change(request, "client.archive", client, ["status"])
+        return redirect("cases:client_detail", pk=pk)
+    return form_response(request, form, title, **context)
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def case_link_client(request, pk):
+    case = case_for_action(request, pk, Action.EDIT_CASE)
+    if not can_link_clients(request.user, case):
+        raise PermissionDenied
+    require_editable(case)
+    form = CaseClientForm(
+        request.POST if request.method == "POST" else None, actor=request.user, case=case
+    )
+    if form.is_valid():
+        try:
+            link = link_client(case, form.cleaned_data["client"], request.user)
+        except ValidationError as exc:
+            form.add_error("client", exc)
+        else:
+            audit_change(request, "case.client.link", link, ["clients"])
+            return redirect("cases:detail", pk=pk)
+    return form_response(request, form, "Link client", case_record=case)
 
 
 @login_required

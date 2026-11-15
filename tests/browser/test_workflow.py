@@ -43,3 +43,48 @@ class SignInWorkflowTests(StaticLiveServerTestCase):
             page.goto(self.live_server_url)
             expect(page.get_by_role("heading", name="Sign in", exact=True)).to_be_visible()
             browser.close()
+
+
+class ClientWorkflowTests(StaticLiveServerTestCase):
+    def test_create_find_edit_link_and_archive_in_browser(self):
+        password = "Fictional-browser-passphrase-73!"
+        with patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": password}):
+            call_command("seed_demo", stdout=StringIO())
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            page.goto(self.live_server_url)
+            page.get_by_label("Email", exact=True).fill("attorney.a@example.test")
+            page.get_by_label("Password", exact=True).fill(password)
+            page.get_by_role("button", name="Sign in", exact=True).click()
+            page.get_by_role("link", name="Clients", exact=True).click()
+            page.get_by_role("link", name="Create client", exact=True).click()
+            name = "Fictional Elm Workshop"
+            page.get_by_label("Name", exact=True).fill(name)
+            page.get_by_label("Type", exact=True).select_option("Organization")
+            page.get_by_label("Email", exact=True).fill("Elm@Example.Test")
+            page.get_by_role("button", name="Create client", exact=True).click()
+            expect(page.get_by_role("heading", name=name)).to_be_visible()
+            page.get_by_role("link", name="Back to clients").click()
+            page.get_by_label("Search clients").fill("ELM@EXAMPLE.TEST")
+            page.get_by_role("button", name="Search", exact=True).click()
+            page.get_by_role("link", name=name, exact=True).click()
+            page.get_by_role("link", name="Edit client details").click()
+            page.get_by_label("Phone", exact=True).fill("+1 (202) 555-0142")
+            page.get_by_role("button", name="Save client details").click()
+            expect(page.get_by_text("+12025550142", exact=True)).to_be_visible()
+            page.get_by_role("link", name="Back to clients").click()
+            page.get_by_role("link", name="Back to cases").click()
+            page.get_by_role("link", name="DEMO-ALPHA", exact=True).click()
+            page.get_by_role("link", name="Link client", exact=True).click()
+            page.get_by_label("Client", exact=True).select_option(
+                label=page.get_by_role("option", name=name).inner_text()
+            )
+            page.get_by_role("button", name="Link client", exact=True).click()
+            page.get_by_role("link", name=name, exact=True).click()
+            expect(page.get_by_role("link", name="DEMO-ALPHA")).to_be_visible()
+            page.get_by_role("link", name="Archive client", exact=True).click()
+            page.get_by_role("button", name="Archive client", exact=True).click()
+            expect(page.get_by_text("Archived", exact=True)).to_be_visible()
+            expect(page.get_by_role("link", name="DEMO-ALPHA")).to_be_visible()
+            browser.close()

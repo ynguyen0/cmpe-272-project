@@ -8,9 +8,12 @@ urlpatterns = [
     path("clients/", views.client_index, name="clients"),
     path("clients/new/", views.client_create, name="client_create"),
     path("clients/<int:pk>/", views.client_detail, name="client_detail"),
+    path("clients/<int:pk>/edit/", views.client_edit, name="client_edit"),
+    path("clients/<int:pk>/archive/", views.client_archive, name="client_archive"),
     path("audit/", views.audit_index, name="audit"),
     path("cases/new/", views.case_create, name="create"),
     path("cases/<int:pk>/", views.detail, name="detail"),
+    path("cases/<int:pk>/clients/link/", views.case_link_client, name="link_client"),
     path("cases/<int:pk>/edit/", views.case_edit, name="edit"),
     path("cases/<int:pk>/archive/", views.case_archive, name="archive"),
     path(

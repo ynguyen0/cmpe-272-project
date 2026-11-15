@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
@@ -9,7 +9,7 @@ from audit.models import AuditEvent
 from clients.models import Client
 
 from .models import Case, CaseClient, CaseMembership
-from .policies import case_allows, cases_visible_to, clients_visible_to
+from .policies import can_link_clients, case_allows, cases_visible_to, clients_visible_to
 
 
 def lock_actor(request):
@@ -48,12 +48,51 @@ def require_editable(case):
         raise PermissionDenied
 
 
+def lock_visible_client(actor, pk, *, active_only=False):
+    # Lock the client before changing its status or any of its links.
+    scoped = clients_visible_to(actor)
+    clients = Client.objects.select_for_update(no_key=True).filter(pk__in=scoped.values("pk"))
+    client = get_object_or_404(clients, pk=pk)
+    if active_only and client.status != Client.Status.ACTIVE:
+        raise Http404
+    # Recheck using fresh reads after locking. A historical link rules out intake access.
+    links = CaseClient.objects.filter(client=client)
+    if client.created_by_id == actor.pk and not links.exists():
+        return client
+    link = (
+        links.select_for_update(no_key=True)
+        .filter(is_active=True, case__in=cases_visible_to(actor))
+        .order_by("pk")
+        .first()
+    )
+    if link is None:
+        raise Http404
+    get_object_or_404(
+        CaseMembership.objects.select_for_update(no_key=True),
+        case_id=link.case_id,
+        user=actor,
+        is_active=True,
+    )
+    return client
+
+
+def link_client(case, client, actor):
+    if not can_link_clients(actor, case):
+        raise PermissionDenied
+    require_editable(case)
+    client = lock_visible_client(actor, client.pk, active_only=True)
+    link, created = CaseClient.objects.get_or_create(case=case, client=client)
+    if not created:
+        if link.is_active:
+            raise ValidationError("This client is already linked to the case.")
+        link.update_with_revision(link.revision, is_active=True)
+    return link
+
+
 def create_case(form, actor):
     client = form.cleaned_data["client"]
     attorney = form.cleaned_data["responsible_attorney"]
-    Client.objects.select_for_update(no_key=True).get(pk=client.pk)
-    if not clients_visible_to(actor).filter(pk=client.pk, status=Client.Status.ACTIVE).exists():
-        raise Http404
+    client = lock_visible_client(actor, client.pk, active_only=True)
     case = form.save(commit=False)
     case.number = f"CASE-{uuid4().hex}"
     case.responsible_attorney = attorney
@@ -77,11 +116,15 @@ def create_case(form, actor):
 
 
 def audit_change(request, action, record, fields=()):
-    AuditEvent.objects.create(
+    return audit_event(request, action, record._meta.model_name, str(record.pk), fields)
+
+
+def audit_event(request, action, resource_type, resource_id="", fields=()):
+    return AuditEvent.objects.create(
         actor=request.user,
         action=action,
-        resource_type=record._meta.model_name,
-        resource_id=str(record.pk),
+        resource_type=resource_type,
+        resource_id=resource_id,
         result=AuditEvent.Result.SUCCESS,
         correlation_id=uuid4(),
         # Audit change names are limited by the existing append-only schema.

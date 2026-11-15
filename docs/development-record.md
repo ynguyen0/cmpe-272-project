@@ -52,6 +52,10 @@ Initial status for every story was **Planned**; owner: **Unassigned**. The backl
 | USER-01 | Codex; team owner pending | In review | Initial custom user migration, `createsuperuser`, administrator creation form and tests | Team review |
 | USER-02 | Codex; team owner pending | In review | `accounts/services.py`; role, activation, revocation, and last-administrator checks | Team review |
 | ACCESS-01 | Codex; team owner pending | In progress | `cases/policies.py`, filtered views; `PermissionTests` and browser denial | Full action/mutation matrix and every-domain integration remain |
+| CLIENT-01 | Codex; team owner pending | In review | Validated individual/organization intake, contact normalization, and scoped duplicate warnings; integration and Chromium coverage | Team review |
+| CLIENT-02 | Codex; team owner pending | In review | Scoped client search, paging, detail, and linked case history; integration and Chromium coverage | Team review |
+| CLIENT-03 | Codex; team owner pending | In review | Revision-checked contact updates and archive, with client audit events; integration and Chromium coverage | Team review |
+| CASE-03 | Codex; team owner pending | In progress | Scoped addition and reactivation of client links for editable cases, with an audit event | Link removal and team changes remain |
 | CASE-02 | Codex; team owner pending | In progress | `cases/views.py`, templates; read visibility tests | Search, filters, paging, edits, and conflict checks remain |
 | DEL-01 | Codex; team owner pending | In progress | `scripts/check.sh`, workflow, Jenkinsfile; 34 local tests passed on 2026-11-10 including migration/schema checks | Expand tests with release workflows; hosted CI/induced-failure evidence remains |
 | DEL-02 | Codex; team owner pending | In progress | Root README, architecture, lock, migrations, seed, contributing policy | Teammate review/reproduction, backup/restore and final delivery docs remain |

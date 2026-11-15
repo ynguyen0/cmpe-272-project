@@ -6,7 +6,24 @@
   {% if target %}
     <p>{{ target.full_name }} · {{ target.email }}</p>
   {% endif %}
+  {% if client_record %}<p>Client #{{ client_record.pk }}</p>{% endif %}
+  {% if description %}<p>{{ description }}</p>{% endif %}
+  {% if matches %}
+    <div class="alert alert-warning" role="alert">
+      <p>Possible duplicates based on similar names or matching contact information:</p>
+      <ul class="mb-0">
+        {% for match in matches %}
+          <li><a href="{% url 'cases:client_detail' match.pk %}">{{ match.name }} (#{{ match.pk }})</a> · {{ match.status }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
   {% include 'accounts/form_fields.html' %}
+  {% if client_record %}
+    <p class="mt-3"><a href="{% url 'cases:client_detail' client_record.pk %}">Back to client details</a></p>
+  {% elif case_record %}
+    <p class="mt-3"><a href="{% url 'cases:detail' case_record.pk %}">Back to case</a></p>
+  {% endif %}
   {% if target %}
     <p class="mt-3">
       <a href="{% url 'accounts:access' target.pk %}">Reload account</a>

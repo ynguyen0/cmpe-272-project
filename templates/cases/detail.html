@@ -13,9 +13,12 @@
   {% if can_archive %}<a href="{% url 'cases:archive' case.pk %}">Archive case</a>{% endif %}
 </div>
 <h2 class="h5">Clients</h2>
+{% if can_link_clients %}<p><a href="{% url 'cases:link_client' case.pk %}">Link client</a></p>{% endif %}
 <ul>
   {% for client_record in clients %}
-    <li><a href="{% url 'cases:client_detail' client_record.pk %}">{{ client_record.name }}</a></li>
+    <li><a href="{% url 'cases:client_detail' client_record.pk %}">{{ client_record.name }}</a>
+      {% if client_record.status == 'Archived' %}(archived){% endif %}
+    </li>
   {% empty %}
     <li>No linked clients.</li>
   {% endfor %}

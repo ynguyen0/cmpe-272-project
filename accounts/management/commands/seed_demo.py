@@ -70,16 +70,18 @@ class Command(BaseCommand):
             )
         a, b = users["attorney.a"], users["attorney.b"]
         clients = {}
-        for key, name, creator in [
-            ("alpha", "Fictional Avery Lane", a),
-            ("beta", "Fictional Morgan Reed", b),
-            ("shared", "Fictional Orchard Studio", a),
-            ("unlinked.a", "Fictional Intake A", a),
-            ("unlinked.b", "Fictional Intake B", b),
+        for key, name, creator, kind, phone in [
+            ("alpha", "Fictional Avery Lane", a, Client.Type.INDIVIDUAL, "+12025550101"),
+            ("beta", "Fictional Morgan Reed", b, Client.Type.INDIVIDUAL, "+12025550102"),
+            ("shared", "Fictional Orchard Studio", a, Client.Type.ORGANIZATION, "+12025550103"),
+            ("unlinked.a", "Fictional Intake A", a, Client.Type.INDIVIDUAL, ""),
+            ("unlinked.b", "Fictional Intake B", b, Client.Type.INDIVIDUAL, ""),
         ]:
-            clients[key], _ = Client.objects.get_or_create(
-                email=f"client.{key}@example.test",
-                defaults={"name": name, "type": Client.Type.INDIVIDUAL, "created_by": creator},
+            email = f"client.{key}@example.test"
+            # Contact email is not unique; prefer the original demo record on reruns.
+            existing = Client.objects.filter(email=email, created_by=creator).order_by("pk").first()
+            clients[key] = existing or Client.objects.create(
+                email=email, name=name, type=kind, created_by=creator, phone=phone
             )
         alpha, _ = Case.objects.get_or_create(
             number="DEMO-ALPHA",

@@ -122,9 +122,12 @@ ALLOW_DEMO_DATA = False
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {"redact_recovery": {"()": "config.logging.RedactRecoveryURL"}},
+    "filters": {
+        "redact_recovery": {"()": "config.logging.RedactRecoveryURL"},
+        "redact_request_query": {"()": "config.logging.RedactRequestQuery"},
+    },
     "loggers": {
-        name: {"filters": ["redact_recovery"]}
+        name: {"filters": ["redact_recovery", "redact_request_query"]}
         for name in ("django.server", "django.request", "django.security.csrf")
     },
 }

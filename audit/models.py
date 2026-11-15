@@ -4,6 +4,36 @@ from django.db import models
 
 from config.models import enum_check, nonblank_check
 
+AUDIT_CHANGE_FIELDS = [
+    "name",
+    "email",
+    "phone",
+    "address",
+    "notes",
+    "role",
+    "is_active",
+    "title",
+    "type",
+    "summary",
+    "status",
+    "responsible_attorney",
+    "opened_on",
+    "closed_on",
+    "relationship",
+    "responsibility",
+    "category",
+    "state",
+    "assignee",
+    "priority",
+    "due_at",
+    "completed_at",
+    "completed_by",
+    "responsible_user",
+    "is_archived",
+    "clients",
+    "members",
+]
+
 
 class AuditEvent(models.Model):
     """Append-only history, protected by a PostgreSQL trigger as well as actor FKs."""
@@ -13,32 +43,7 @@ class AuditEvent(models.Model):
         FAILURE = "failure"
         DENIED = "denied"
 
-    CHANGE_FIELDS = [
-        "name",
-        "email",
-        "role",
-        "is_active",
-        "title",
-        "type",
-        "summary",
-        "status",
-        "responsible_attorney",
-        "opened_on",
-        "closed_on",
-        "relationship",
-        "responsibility",
-        "category",
-        "state",
-        "assignee",
-        "priority",
-        "due_at",
-        "completed_at",
-        "completed_by",
-        "responsible_user",
-        "is_archived",
-        "clients",
-        "members",
-    ]
+    CHANGE_FIELDS = AUDIT_CHANGE_FIELDS
 
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True)
     action = models.CharField(max_length=80)
@@ -64,34 +69,7 @@ class AuditEvent(models.Model):
             nonblank_check("resource_type"),
             enum_check("result", ["success", "failure", "denied"]),
             models.CheckConstraint(
-                condition=models.Q(
-                    changed_fields__contained_by=[
-                        "name",
-                        "email",
-                        "role",
-                        "is_active",
-                        "title",
-                        "type",
-                        "summary",
-                        "status",
-                        "responsible_attorney",
-                        "opened_on",
-                        "closed_on",
-                        "relationship",
-                        "responsibility",
-                        "category",
-                        "state",
-                        "assignee",
-                        "priority",
-                        "due_at",
-                        "completed_at",
-                        "completed_by",
-                        "responsible_user",
-                        "is_archived",
-                        "clients",
-                        "members",
-                    ]
-                )
+                condition=models.Q(changed_fields__contained_by=AUDIT_CHANGE_FIELDS)
                 & models.Q(changed_fields__len__lte=20),
                 name="audit_change_fields_limited",
             ),

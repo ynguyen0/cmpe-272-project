@@ -70,6 +70,21 @@ def clients_visible_to(user):
     ).distinct()
 
 
+def can_archive_clients(user):
+    return has_capability(user, Action.VIEW_CASE) and user.role in {
+        Role.ADMINISTRATOR,
+        Role.ATTORNEY,
+    }
+
+
+def can_link_clients(user, case):
+    return (
+        user.is_authenticated
+        and user.role in {Role.ADMINISTRATOR, Role.ATTORNEY}
+        and case_allows(user, Action.EDIT_CASE, case)
+    )
+
+
 def documents_visible_to(user):
     return Document.objects.filter(case__in=cases_visible_to(user))
 

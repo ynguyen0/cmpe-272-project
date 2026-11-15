@@ -24,6 +24,9 @@ capabilities require a direct grant to the account.
 | --- | --- | --- | --- |
 | Manage accounts and roles | Yes | No | No |
 | Create clients and cases | Yes | Yes | If granted |
+| View and edit active client details | With client access | With client access | With client access |
+| Archive a client | With client access | With client access | No |
+| Link a client to an existing editable case | With access to both records | With access to both records | No |
 | View confidential case content | With case access | Assigned cases | Assigned cases |
 | Edit case details | With case access | Assigned cases | Summary and court docket number |
 | Manage documents | With case access | Assigned cases | Assigned cases, if granted |
@@ -105,14 +108,14 @@ As an attorney or staff member, I can access only permitted records and actions.
 
 #### CLIENT-01 — Create clients (depends on ACCESS-01)
 As an attorney or staff member, I can register a client before opening a case.
-- Save valid required/optional fields and show the generated ID; a new unlinked client is available to its creator and administrators.
-- Missing name/type, invalid contact format, and excessive lengths produce field errors. Duplicate names are allowed; selection/results show IDs to distinguish them.
-- A different nonadministrator cannot read or update the unlinked client by ID; anonymous creation fails.
+- Save valid required/optional fields and show the generated ID; a never-linked intake client is available only to its creator, including when the creator is an administrator.
+- Missing name/type, invalid contact format, and excessive lengths produce field errors. Warn about possible duplicates in the viewer’s scope using similar names or matching contact information. Confirm distinct records to proceed; selectors and results include IDs.
+- Other users cannot read or update the intake client by ID; anonymous creation fails.
 
 #### CLIENT-02 — View and search clients (depends on CLIENT-01)
 As a team member, I can find clients I am allowed to serve.
-- List authorized clients and search by case-insensitive name substring or exact ID, with deterministic name/ID ordering and pages of at most 25. Blank search lists authorized clients; no matches shows an empty state.
-- Reject malformed IDs, invalid page values, and search text longer than 150 characters; never interpret search text as code or SQL.
+- List authorized clients and search by case-insensitive name or email substring, exact ID, or normalized phone digits, with deterministic name/ID ordering and pages of at most 25. Blank search lists authorized clients; no matches shows an empty state.
+- Reject invalid page values and search text longer than 150 characters; never interpret search text as code or SQL.
 - Results, totals, detail views, and linked-case lists contain only authorized records, including after membership removal.
 
 #### CLIENT-03 — Update client details (depends on CLIENT-02)
@@ -120,6 +123,7 @@ As an authorized team member, I can correct client information.
 - Update permitted fields and see the saved values after refresh; blank optional fields clear their values. Preserve immutable ID and creation metadata.
 - Reject invalid email/phone, blank name, and stale edits without partial changes.
 - Users lacking current client access cannot update it; request fields cannot replace creator or grant access to another case.
+- Authorized attorneys and administrators can archive a client while keeping existing case links. Archived clients remain accessible through the Archived filter and existing case links.
 
 #### CASE-01 — Create a case and link its first clients (depends on CLIENT-01)
 As an attorney, I can open a case for existing clients.

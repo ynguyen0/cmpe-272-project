@@ -163,6 +163,19 @@ class DemoCommandTests(SeededTestCase):
         self.assertEqual(dates, list(Task.objects.order_by("pk").values_list("due_at", flat=True)))
         self.assertEqual(before, [5, 5, 2, 2, 4, 4, 1])
 
+    def test_rerun_preserves_demo_links_when_contact_email_is_shared(self):
+        original = Client.objects.get(email="client.alpha@example.test")
+        duplicate = Client.objects.create(
+            name="Fictional Duplicate",
+            type=Client.Type.INDIVIDUAL,
+            email=original.email,
+            created_by=original.created_by,
+        )
+        with patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": "Another-valid-passphrase-81!"}):
+            call_command("seed_demo", stdout=StringIO())
+        self.assertEqual(Client.objects.filter(email=original.email).count(), 2)
+        self.assertFalse(duplicate.case_links.exists())
+
     def test_private_files_have_no_url_or_public_route(self):
         for doc in Document.objects.all():
             with self.assertRaises(ValueError):
