@@ -17,7 +17,7 @@ from pypdf import PdfWriter
 
 from accounts.models import User
 from audit.models import AuditEvent
-from cases.models import Case, CaseMembership
+from cases.models import Case
 from documents.models import Document
 from documents.uploads import MAX_DOCUMENT_BYTES
 from documents.validation import MEDIA_TYPES
@@ -69,9 +69,7 @@ def sample_image(format):
 class DocumentManagementTests(SeededTestCase):
     def setUp(self):
         self.case = Case.objects.get(number="DEMO-ALPHA")
-        self.other_case = Case.objects.get(number="DEMO-BETA")
         self.attorney = User.objects.get(email="attorney.a@example.test")
-        self.other_attorney = User.objects.get(email="attorney.b@example.test")
         self.staff = User.objects.get(email="staff.a@example.test")
         self.upload_url = reverse("cases:document_upload", args=[self.case.pk])
         self.list_url = reverse("cases:documents", args=[self.case.pk])
@@ -183,24 +181,17 @@ class DocumentManagementTests(SeededTestCase):
         self.assertEqual(self.storage_files(), before)
         self.assertFalse(Document.objects.filter(title="Fictional evidence").exists())
 
-    def test_copied_download_url_and_case_mutations_follow_membership(self):
-        unauthenticated = Browser()
-        self.assertEqual(unauthenticated.post(self.upload_url, self.data()).status_code, 302)
-        unauthorized_url = reverse("cases:document_upload", args=[self.other_case.pk])
-        self.assertEqual(self.client.post(unauthorized_url, self.data()).status_code, 404)
+    def test_upload_requires_sign_in_staff_grant_and_csrf(self):
+        anonymous = Browser()
+        self.assertEqual(anonymous.post(self.upload_url, self.data()).status_code, 302)
+
         self.client.force_login(self.staff)
         self.assertEqual(self.client.post(self.upload_url, self.data()).status_code, 403)
-        self.client.force_login(self.attorney)
-        self.assertEqual(self.client.post(self.upload_url, self.data()).status_code, 302)
-        document = Document.objects.get(title="Fictional evidence")
-        copied_url = self.download_url(document)
-        self.client.force_login(self.other_attorney)
-        self.assertEqual(self.client.get(copied_url).status_code, 404)
-        self.assertEqual(self.client.get(self.list_url).status_code, 404)
-        self.client.force_login(self.staff)
-        self.assertEqual(self.client.head(copied_url).status_code, 200)
-        CaseMembership.objects.filter(case=self.case, user=self.staff).update(is_active=False)
-        self.assertEqual(self.client.get(copied_url).status_code, 404)
+
+        browser = Browser(enforce_csrf_checks=True)
+        browser.force_login(self.attorney)
+        self.assertEqual(browser.post(self.upload_url, self.data()).status_code, 403)
+        self.assertFalse(Document.objects.filter(title="Fictional evidence").exists())
 
     def test_edit_and_archive_preserve_storage_and_hide_document_from_active_list(self):
         self.client.post(self.upload_url, self.data())

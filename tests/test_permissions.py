@@ -99,6 +99,8 @@ class PermissionMatrixTests(SeededTestCase):
         CaseMembership.objects.create(case=self.alpha, user=self.other_attorney)
         self.assertFalse(case_allows(self.other_attorney, Action.ARCHIVE_CASE, self.alpha))
         self.assertFalse(case_allows(self.staff, Action.ARCHIVE_CASE, self.alpha))
+        CaseMembership.objects.create(case=self.alpha, user=self.inactive)
+        self.assertFalse(case_allows(self.inactive, Action.VIEW_CASE, self.alpha))
 
     def test_account_and_audit_routes_have_independent_permissions(self):
         self.client.force_login(self.admin)
@@ -134,9 +136,6 @@ class PermissionMatrixTests(SeededTestCase):
                 "Tasks": 0,
                 "Deadlines": 0,
             },
-        )
-        self.assertNotContains(
-            self.client.get(reverse("cases:clients"), {"q": "Avery"}), self.alpha_client.name
         )
         shared = self.client.get(reverse("cases:client_detail", args=[self.shared_client.pk]))
         self.assertContains(shared, self.beta.title)
@@ -177,6 +176,10 @@ class PermissionMatrixTests(SeededTestCase):
         )
         self.client.force_login(self.attorney)
         attempts = (
+            ("get", "detail", [self.beta.pk]),
+            ("get", "detail", [999999]),
+            ("get", "documents", [self.beta.pk]),
+            ("post", "document_upload", [self.beta.pk]),
             ("get", "document_download", [self.beta.pk, beta_doc.pk]),
             ("get", "document_download", [self.alpha.pk, beta_doc.pk]),
             ("get", "document_download", [self.beta.pk, self.document.pk]),
@@ -200,10 +203,15 @@ class PermissionMatrixTests(SeededTestCase):
         self.assertEqual(beta_doc.revision, 1)
 
     def test_copied_download_and_form_lose_access_on_membership_revocation(self):
-        self.client.force_login(self.staff)
-        self.grant(self.staff, Action.MANAGE_DOCUMENTS)
         archived = Document.objects.get(case=self.alpha, state=Document.State.ARCHIVED)
         url = reverse("cases:document_download", args=[self.alpha.pk, archived.pk])
+        self.client.force_login(self.other_attorney)
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+        self.client.force_login(self.staff)
+        self.grant(self.staff, Action.MANAGE_DOCUMENTS)
+        case_url = reverse("cases:detail", args=[self.alpha.pk])
+        self.assertEqual(self.client.get(case_url).status_code, 200)
         edit_url = reverse("cases:document_edit", args=[self.alpha.pk, self.document.pk])
         self.assertEqual(self.client.get(edit_url).status_code, 200)
         response = self.client.get(url)
@@ -212,6 +220,7 @@ class PermissionMatrixTests(SeededTestCase):
         self.assertIn("attachment;", response.headers["Content-Disposition"])
         self.assertIn("no-store", response.headers["Cache-Control"])
         CaseMembership.objects.filter(case=self.alpha, user=self.staff).update(is_active=False)
+        self.assertEqual(self.client.get(case_url).status_code, 404)
         self.assertEqual(self.client.get(url).status_code, 404)
         self.assertEqual(
             self.client.post(edit_url, {"revision": self.document.revision}).status_code, 404

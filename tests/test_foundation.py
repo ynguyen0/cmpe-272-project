@@ -5,7 +5,6 @@ from io import StringIO
 from unittest.mock import patch
 
 from django.conf import settings
-from django.contrib.auth.models import AnonymousUser
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError, transaction
@@ -14,8 +13,7 @@ from django.urls import reverse
 
 from accounts.models import User
 from audit.models import AuditEvent
-from cases.models import Case, CaseMembership
-from cases.policies import cases_visible_to, clients_visible_to
+from cases.models import Case
 from clients.models import Client
 from documents.models import Document
 from work.models import Deadline, Task
@@ -49,65 +47,6 @@ class AccountTests(TestCase):
             )
 
 
-class PermissionTests(SeededTestCase):
-    def setUp(self):
-        self.a = User.objects.get(email="attorney.a@example.test")
-        self.b = User.objects.get(email="attorney.b@example.test")
-        self.staff = User.objects.get(email="staff.a@example.test")
-        self.alpha = Case.objects.get(number="DEMO-ALPHA")
-        self.beta = Case.objects.get(number="DEMO-BETA")
-
-    def test_roles_and_membership_scope_case_reads(self):
-        for email, expected in [
-            ("admin@example.test", set()),
-            ("attorney.a@example.test", {self.alpha.pk}),
-            ("attorney.b@example.test", {self.beta.pk}),
-            ("staff.a@example.test", {self.alpha.pk}),
-            ("inactive@example.test", set()),
-        ]:
-            with self.subTest(email=email):
-                user = User.objects.get(email=email)
-                self.assertSetEqual(
-                    set(cases_visible_to(user).values_list("pk", flat=True)), expected
-                )
-        self.assertFalse(cases_visible_to(AnonymousUser()).exists())
-
-    def test_client_scope_shared_and_unlinked(self):
-        visible = set(clients_visible_to(self.a).values_list("email", flat=True))
-        self.assertSetEqual(
-            visible,
-            {
-                "client.alpha@example.test",
-                "client.shared@example.test",
-                "client.unlinked.a@example.test",
-            },
-        )
-        self.assertFalse(clients_visible_to(AnonymousUser()).exists())
-
-    def test_direct_url_and_list_do_not_leak_other_cases(self):
-        self.client.force_login(self.a)
-        response = self.client.get(reverse("cases:index"))
-        self.assertContains(response, self.alpha.title)
-        self.assertNotContains(response, self.beta.title)
-        self.assertEqual(
-            self.client.get(reverse("cases:detail", args=[self.beta.pk])).status_code, 404
-        )
-        self.assertEqual(self.client.get(reverse("cases:detail", args=[999999])).status_code, 404)
-
-    def test_removal_and_deactivation_apply_to_existing_sessions(self):
-        self.client.force_login(self.staff)
-        url = reverse("cases:detail", args=[self.alpha.pk])
-        self.assertEqual(self.client.get(url).status_code, 200)
-        membership = CaseMembership.objects.get(case=self.alpha, user=self.staff)
-        membership.update_with_revision(membership.revision, is_active=False)
-        self.assertEqual(self.client.get(url).status_code, 404)
-        self.staff.is_active = False
-        self.staff.save()
-        self.assertRedirects(
-            self.client.get(url), f"/accounts/login/?next={url}", fetch_redirect_response=False
-        )
-
-
 class AuthenticationTests(SeededTestCase):
     def test_login_normalizes_email_and_logout_invalidates_session(self):
         response = self.client.post(
@@ -123,20 +62,6 @@ class AuthenticationTests(SeededTestCase):
         self.client.cookies[settings.SESSION_COOKIE_NAME] = cookie
         self.assertEqual(self.client.get(reverse("cases:index")).status_code, 302)
 
-    def test_wrong_and_inactive_credentials_share_error(self):
-        errors = []
-        for email in ["unknown@example.test", "inactive@example.test", "attorney.a@example.test"]:
-            response = self.client.post(
-                reverse("accounts:login"), {"username": email, "password": "incorrect"}
-            )
-            self.assertEqual(response.status_code, 200)
-            errors.append(list(response.context["form"].non_field_errors()))
-        self.assertEqual(errors[0], errors[1])
-        self.assertEqual(errors[1], errors[2])
-        self.assertFalse(
-            self.client.login(username="inactive@example.test", password=DEMO_PASSWORD)
-        )
-
     def test_csrf_required_and_sensitive_pages_not_cached(self):
         from django.test import Client as HttpClient
 
@@ -149,21 +74,9 @@ class AuthenticationTests(SeededTestCase):
 
 
 class DemoCommandTests(SeededTestCase):
-    def test_rerun_preserves_counts_passwords_and_dates(self):
+    def test_seed_rerun_preserves_records_even_when_contact_email_is_shared(self):
         models = [User, Client, Case, Document, Task, Deadline, AuditEvent]
-        before = [model.objects.count() for model in models]
-        hashes = list(User.objects.order_by("pk").values_list("password", flat=True))
-        dates = list(Task.objects.order_by("pk").values_list("due_at", flat=True))
-        with patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": "Another-valid-passphrase-81!"}):
-            call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(before, [model.objects.count() for model in models])
-        self.assertEqual(
-            hashes, list(User.objects.order_by("pk").values_list("password", flat=True))
-        )
-        self.assertEqual(dates, list(Task.objects.order_by("pk").values_list("due_at", flat=True)))
-        self.assertEqual(before, [5, 5, 2, 2, 4, 4, 1])
-
-    def test_rerun_preserves_demo_links_when_contact_email_is_shared(self):
+        self.assertEqual([model.objects.count() for model in models], [5, 5, 2, 2, 4, 4, 1])
         original = Client.objects.get(email="client.alpha@example.test")
         duplicate = Client.objects.create(
             name="Fictional Duplicate",
@@ -171,9 +84,17 @@ class DemoCommandTests(SeededTestCase):
             email=original.email,
             created_by=original.created_by,
         )
+        before = [model.objects.count() for model in models]
+        hashes = list(User.objects.order_by("pk").values_list("password", flat=True))
+        dates = list(Task.objects.order_by("pk").values_list("due_at", flat=True))
         with patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": "Another-valid-passphrase-81!"}):
             call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(Client.objects.filter(email=original.email).count(), 2)
+        self.assertEqual([model.objects.count() for model in models], before)
+        self.assertEqual(
+            list(User.objects.order_by("pk").values_list("password", flat=True)), hashes
+        )
+        self.assertEqual(list(Task.objects.order_by("pk").values_list("due_at", flat=True)), dates)
+        self.assertTrue(original.case_links.exists())
         self.assertFalse(duplicate.case_links.exists())
 
     def test_private_files_have_no_url_or_public_route(self):

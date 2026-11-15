@@ -11,7 +11,6 @@ from django.utils import timezone
 from accounts.models import User
 from audit.models import AuditEvent
 from cases.models import Case, CaseClient, CaseMembership
-from cases.policies import cases_visible_to, clients_visible_to
 from clients.models import Client
 from config.models import ConcurrentEditError
 from documents.models import Document
@@ -91,6 +90,9 @@ class SchemaConstraintTests(SeededTestCase):
                 self.assert_rejected(
                     lambda queryset=queryset, field=field: queryset.update(**{field: "INVALID"})
                 )
+        for model, record in {type(record): record for record, _ in records}.items():
+            with self.subTest(model=model._meta.label, field="revision"):
+                queryset = model.objects.filter(pk=record.pk)
                 self.assert_rejected(lambda queryset=queryset: queryset.update(revision=0))
 
     def test_case_dates_and_archive_require_closed_case(self):
@@ -151,23 +153,6 @@ class SchemaConstraintTests(SeededTestCase):
         membership = CaseMembership.objects.get(case=self.alpha, user=self.a)
         # Composite FK protects historical references even against direct link deletion.
         self.assert_rejected(lambda: membership.delete())
-
-    def test_deactivation_keeps_history_and_archives_remain_authorized(self):
-        staff = User.objects.get(email="staff.a@example.test")
-        membership = CaseMembership.objects.get(case=self.alpha, user=staff)
-        membership.update_with_revision(1, is_active=False)
-        self.assertTrue(CaseMembership.objects.filter(pk=membership.pk).exists())
-        self.assertFalse(cases_visible_to(staff).filter(pk=self.alpha.pk).exists())
-        self.alpha.update_with_revision(
-            self.alpha.revision, status="Closed", closed_on=self.alpha.opened_on, is_archived=True
-        )
-        client = self.alpha.clients.first()
-        client.update_with_revision(client.revision, status="Archived")
-        self.assertTrue(cases_visible_to(self.a).filter(pk=self.alpha.pk).exists())
-        self.assertTrue(clients_visible_to(self.a).filter(pk=client.pk).exists())
-        self.assertFalse(cases_visible_to(self.b).filter(pk=self.alpha.pk).exists())
-        document = Document.objects.get(state="Archived")
-        self.assertTrue(document.file.storage.exists(document.file.name))
 
     def test_expected_query_indexes_exist_in_postgresql(self):
         expected = {

@@ -51,7 +51,7 @@ Initial status for every story was **Planned**; owner: **Unassigned**. The backl
 | AUTH-02 | Codex; team owner pending | In review | `accounts/middleware.py`; expiry, logout replay and deactivation tests | Browser sign-in redirects are retained for expired sessions |
 | USER-01 | Codex; team owner pending | In review | Initial custom user migration, `createsuperuser`, administrator creation form and tests | Team review |
 | USER-02 | Codex; team owner pending | In review | `accounts/services.py`; role, activation, revocation, and last-administrator checks | Team review |
-| ACCESS-01 | Codex; team owner pending | In progress | `cases/policies.py`, filtered views; `PermissionTests` and browser denial | Full action/mutation matrix and every-domain integration remain |
+| ACCESS-01 | Codex; team owner pending | In progress | `cases/policies.py`, filtered views; `PermissionMatrixTests` and feature integration tests | Full action/mutation matrix and every-domain integration remain |
 | CLIENT-01 | Codex; team owner pending | In review | Validated individual/organization intake, contact normalization, and scoped duplicate warnings; integration and Chromium coverage | Team review |
 | CLIENT-02 | Codex; team owner pending | In review | Scoped client search, paging, detail, and linked case history; integration and Chromium coverage | Team review |
 | CLIENT-03 | Codex; team owner pending | In review | Revision-checked contact updates and archive, with client audit events; integration and Chromium coverage | Team review |

@@ -72,11 +72,12 @@ class AccountWorkflowTests(TestCase):
         unknown = self.sign_in(self.client, email="unknown@example.test")
         inactive = self.sign_in(self.client)
         wrong = self.sign_in(self.client, email=self.admin.email, password="wrong")
+        self.assertEqual(unknown.status_code, 200)
+        errors = list(unknown.context["form"].non_field_errors())
+        self.assertTrue(errors)
         for response in (inactive, wrong):
-            self.assertEqual(
-                list(response.context["form"].non_field_errors()),
-                list(unknown.context["form"].non_field_errors()),
-            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(list(response.context["form"].non_field_errors()), errors)
 
     def test_account_creation_is_restricted_and_validates_passwords_and_email(self):
         url = reverse("accounts:create")
