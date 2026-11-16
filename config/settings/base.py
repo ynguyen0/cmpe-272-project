@@ -35,6 +35,9 @@ INSTALLED_APPS = [
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Early, so every later response — including authentication failures and
+    # permission denials — can be audited under one correlation ID.
+    "audit.middleware.AuditCorrelationMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
