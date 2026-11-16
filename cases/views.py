@@ -19,7 +19,8 @@ from documents.models import Document
 from documents.scanning import ScanUnavailable, scan_upload
 from documents.services import publish_document
 from documents.uploads import safe_filename
-from work.models import Task
+from work.models import Deadline, Task
+from work.transitions import TASK_TRANSITIONS, allows
 
 from .forms import (
     CaseClientForm,
@@ -37,7 +38,10 @@ from .forms import (
     DocumentUploadForm,
     RevisionForm,
     TaskAssignmentForm,
+    TaskDetailsForm,
     TaskReassignmentForm,
+    TaskStatusForm,
+    WorkFilterForm,
     active_users_with_role,
 )
 from .models import Case, CaseMembership
@@ -160,16 +164,16 @@ def detail(request, pk):
             .filter(case=case)
             .select_related("responsible_user")
             .order_by("due_at", "pk"),
+            # A Done task still offers the status link, because reopening it to
+            # "To do" is a permitted transition (TASK-03).
             "task_rows": [
                 (
                     task,
-                    can_complete
-                    and not task.is_archived
-                    and task.assignee_id == user.pk
-                    and task.status != Task.Status.DONE,
+                    can_complete and not task.is_archived and task.assignee_id == user.pk,
                 )
                 for task in tasks.select_related("assignee").order_by("due_at", "pk")
             ],
+            "now": timezone.now(),
             "can_edit": editable and case_allows(user, Action.EDIT_CASE, case),
             "can_link_clients": editable and can_manage,
             "can_manage_team": editable and can_manage,
@@ -820,3 +824,128 @@ def task_complete(request, pk, task_pk):
         pk,
         fixed_changes={"status": Task.Status.DONE, "completed_at": timezone.now()},
     )
+
+
+def overdue_filter(queryset, model, now=None):
+    """Unfinished work whose due instant has passed (TASK-03, DATE-02).
+
+    Overdue is "due before now and not finished", so completed or cancelled work
+    never counts however old it is.
+    """
+    finished = (
+        [Task.Status.DONE]
+        if model is Task
+        else [Deadline.Status.COMPLETED, Deadline.Status.CANCELLED]
+    )
+    return queryset.filter(due_at__lt=now or timezone.now()).exclude(status__in=finished)
+
+
+@login_required
+@require_safe
+def work_index(request):
+    """Personal work list, defaulting to the signed-in user's own open tasks.
+
+    Administrators and attorneys can widen the assignee filter to anyone they
+    share a case with; the queryset still starts from `tasks_visible_to`, so
+    widening it never reaches a case the viewer cannot see.
+    """
+    user = request.user
+    tasks = tasks_visible_to(user).filter(is_archived=False)
+    colleagues = User.objects.filter(pk__in=tasks.values("assignee_id")).order_by("full_name", "pk")
+    form = WorkFilterForm(request.GET or None, choices=colleagues)
+    page = None
+    if not request.GET:
+        # No filters submitted: show my own work, which is the common case.
+        tasks = tasks.filter(assignee=user)
+        form = WorkFilterForm(choices=colleagues, initial={"assignee": user.pk})
+        page = Paginator(tasks.order_by("due_at", "pk"), 25).get_page(1)
+    elif form.is_valid():
+        data = form.cleaned_data
+        if data["assignee"]:
+            tasks = tasks.filter(assignee=data["assignee"])
+        if data["status"]:
+            tasks = tasks.filter(status=data["status"])
+        if data["priority"]:
+            tasks = tasks.filter(priority=data["priority"])
+        if data["overdue"]:
+            tasks = overdue_filter(tasks, Task)
+        paginator = Paginator(tasks.select_related("case", "assignee").order_by("due_at", "pk"), 25)
+        number = data["page"] or 1
+        if number > paginator.num_pages:
+            form.add_error("page", "This page does not exist.")
+        else:
+            page = paginator.page(number)
+    if page is not None:
+        audit_event(request, "task.list", "task")
+    return render(
+        request,
+        "cases/work.html",
+        {"form": form, "page": page, "now": timezone.now()},
+    )
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def task_edit(request, pk, task_pk):
+    """Update a task's own details, leaving its assignee and status untouched."""
+    case = case_for_action(request, pk, Action.ASSIGN_TASKS)
+    task = get_object_or_404(
+        tasks_visible_to(request.user), case=case, pk=task_pk, is_archived=False
+    )
+    require_editable(case)
+    form = TaskDetailsForm(
+        request.POST if request.method == "POST" else None,
+        initial={
+            "revision": task.revision,
+            "title": task.title,
+            "description": task.description,
+            "priority": task.priority,
+            "due_at": task.due_at,
+        },
+    )
+    return revision_response(request, form, "Edit task", task, "task.edit", pk)
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def task_status(request, pk, task_pk):
+    """Move a task between statuses, recording completion time on `Done`.
+
+    Only the assignee may change status, matching the permission matrix's
+    "own tasks" rule. The transition is rechecked here because the form's
+    choices are presentation, not authorization.
+    """
+    case = case_for_action(request, pk, Action.COMPLETE_TASK)
+    task = get_object_or_404(
+        tasks_visible_to(request.user), case=case, pk=task_pk, is_archived=False
+    )
+    require_editable(case)
+    if not can_complete_task(request.user, task):
+        raise PermissionDenied
+    form = TaskStatusForm(
+        request.POST if request.method == "POST" else None,
+        current=task.status,
+        initial={"revision": task.revision},
+    )
+    if form.is_valid():
+        target = form.cleaned_data["status"]
+        if not allows(TASK_TRANSITIONS, task.status, target):
+            form.add_error("status", "This status change is not allowed.")
+            return form_response(request, form, "Change task status")
+        return revision_response(
+            request,
+            form,
+            "Change task status",
+            task,
+            "task.status",
+            pk,
+            # Completion time is set on Done and cleared on reopen, so the
+            # database's task_completion_matches_status constraint always holds.
+            fixed_changes={
+                "status": target,
+                "completed_at": timezone.now() if target == Task.Status.DONE else None,
+            },
+        )
+    return form_response(request, form, "Change task status")

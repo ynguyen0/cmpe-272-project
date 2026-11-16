@@ -7,6 +7,7 @@ from clients.search import PHONE_INPUT, phone_digits
 from documents.models import Document
 from documents.validation import validate_upload
 from work.models import Task
+from work.transitions import TASK_TRANSITIONS
 
 from .models import Case
 from .policies import clients_visible_to, eligible_assignees
@@ -312,3 +313,46 @@ class TaskReassignmentForm(RevisionForm):
     def __init__(self, *args, case, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["assignee"].queryset = eligible_assignees(case)
+
+
+class TaskDetailsForm(RevisionForm):
+    """Edit a task's own details (TASK-02). Assignee changes use the reassign form."""
+
+    title = forms.CharField(max_length=200)
+    description = forms.CharField(
+        max_length=2000, required=False, widget=forms.Textarea(attrs={"rows": 3})
+    )
+    priority = forms.ChoiceField(choices=Task.Priority.choices)
+    due_at = forms.DateTimeField()
+
+
+class TaskStatusForm(RevisionForm):
+    """Move a task between statuses (TASK-03).
+
+    The choices offered are only those reachable from the task's current status,
+    so an invalid transition cannot be selected. The view checks the transition
+    again on save, because the field alone is not authorization.
+    """
+
+    status = forms.ChoiceField(choices=())
+
+    def __init__(self, *args, current, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["status"].choices = [
+            (value, value) for value in sorted(TASK_TRANSITIONS.get(current, ()))
+        ]
+
+
+class WorkFilterForm(StrictFields, forms.Form):
+    """Filters for the personal and authorized work lists."""
+
+    assignee = forms.ModelChoiceField(queryset=User.objects.none(), required=False)
+    status = forms.ChoiceField(choices=[("", "Any")] + Task.Status.choices, required=False)
+    priority = forms.ChoiceField(choices=[("", "Any")] + Task.Priority.choices, required=False)
+    overdue = forms.BooleanField(required=False, label="Overdue only")
+    page = forms.IntegerField(min_value=1, required=False, widget=forms.HiddenInput)
+
+    def __init__(self, *args, choices, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["assignee"].queryset = choices
+        self.fields["assignee"].empty_label = "Anyone I can see"

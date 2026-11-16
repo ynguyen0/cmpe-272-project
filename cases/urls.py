@@ -38,4 +38,7 @@ urlpatterns = [
     path("cases/<int:pk>/tasks/assign/", views.task_assign, name="task_assign"),
     path("cases/<int:pk>/tasks/<int:task_pk>/reassign/", views.task_reassign, name="task_reassign"),
     path("cases/<int:pk>/tasks/<int:task_pk>/complete/", views.task_complete, name="task_complete"),
+    path("cases/<int:pk>/tasks/<int:task_pk>/edit/", views.task_edit, name="task_edit"),
+    path("cases/<int:pk>/tasks/<int:task_pk>/status/", views.task_status, name="task_status"),
+    path("work/", views.work_index, name="work"),
 ]
