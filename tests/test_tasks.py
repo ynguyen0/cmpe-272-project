@@ -90,9 +90,7 @@ class TaskEditTests(TaskTestCase):
         self.assertEqual(self.task.title, "Revised task title")
         self.assertEqual(self.task.priority, Task.Priority.HIGH)
         event = self.new_events().get(action="task.edit")
-        self.assertCountEqual(
-            event.changed_fields, ["title", "description", "priority", "due_at"]
-        )
+        self.assertCountEqual(event.changed_fields, ["title", "description", "priority", "due_at"])
 
     def test_blank_title_is_rejected_without_changing_the_task(self):
         self.client.force_login(self.attorney)
