@@ -65,8 +65,11 @@ class ClientManagementTests(SeededTestCase):
             set(events.values_list("action", flat=True)),
             {"client.create", "client.view", "client.edit"},
         )
+        # Order independent: the shared audit writer sorts field names so that
+        # equivalent changes always produce identical rows.
         self.assertCountEqual(
-            events.get(action="client.edit").changed_fields, ["email", "phone", "address", "notes"]
+            events.get(action="client.edit").changed_fields,
+            ["email", "phone", "address", "notes"],
         )
 
     def test_duplicate_warnings_use_visible_records_and_allow_confirmation(self):

@@ -238,8 +238,11 @@ class DocumentManagementTests(SeededTestCase):
             b"Fictional document.",
         )
         events = AuditEvent.objects.filter(resource_type="document", resource_id=str(document.pk))
+        # Order independent: the shared audit writer sorts field names so that
+        # equivalent changes always produce identical rows.
         self.assertCountEqual(
-            events.get(action="document.edit").changed_fields, ["title", "category", "description"]
+            events.get(action="document.edit").changed_fields,
+            ["title", "category", "description"],
         )
         self.assertTrue(events.filter(action="document.archive").exists())
 

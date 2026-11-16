@@ -1,3 +1,5 @@
+from datetime import datetime, time, timedelta
+
 from django import forms
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -19,7 +21,8 @@ from documents.models import Document
 from documents.scanning import ScanUnavailable, scan_upload
 from documents.services import publish_document
 from documents.uploads import safe_filename
-from work.models import Task
+from work.models import Deadline, Task
+from work.transitions import DEADLINE_TRANSITIONS, TASK_TRANSITIONS, allows
 
 from .forms import (
     CaseClientForm,
@@ -31,13 +34,20 @@ from .forms import (
     ClientEditForm,
     ClientForm,
     ClientSearchForm,
+    DeadlineDetailsForm,
+    DeadlineFilterForm,
+    DeadlineForm,
+    DeadlineResolutionForm,
     DocumentArchiveForm,
     DocumentEditForm,
     DocumentListForm,
     DocumentUploadForm,
     RevisionForm,
     TaskAssignmentForm,
+    TaskDetailsForm,
     TaskReassignmentForm,
+    TaskStatusForm,
+    WorkFilterForm,
     active_users_with_role,
 )
 from .models import Case, CaseMembership
@@ -160,16 +170,16 @@ def detail(request, pk):
             .filter(case=case)
             .select_related("responsible_user")
             .order_by("due_at", "pk"),
+            # A Done task still offers the status link, because reopening it to
+            # "To do" is a permitted transition (TASK-03).
             "task_rows": [
                 (
                     task,
-                    can_complete
-                    and not task.is_archived
-                    and task.assignee_id == user.pk
-                    and task.status != Task.Status.DONE,
+                    can_complete and not task.is_archived and task.assignee_id == user.pk,
                 )
                 for task in tasks.select_related("assignee").order_by("due_at", "pk")
             ],
+            "now": timezone.now(),
             "can_edit": editable and case_allows(user, Action.EDIT_CASE, case),
             "can_link_clients": editable and can_manage,
             "can_manage_team": editable and can_manage,
@@ -264,7 +274,9 @@ def form_response(request, form, title, *, status=None, **context):
     )
 
 
-def revision_response(request, form, title, record, action, case_id, *, fixed_changes=None):
+def revision_response(
+    request, form, title, record, action, case_id, *, fixed_changes=None, audit_fields=None
+):
     context = {"case_record": record} if isinstance(record, Case) else {}
     if form.is_valid():
         changes = (
@@ -277,7 +289,10 @@ def revision_response(request, form, title, record, action, case_id, *, fixed_ch
         except ConcurrentEditError as exc:
             form.add_error(None, str(exc))
             return form_response(request, form, title, status=409, **context)
-        audit_change(request, action, record, changes)
+        # A caller may record a narrower set of names than it writes, for a
+        # field that is not on the audit allowlist. The change still happens;
+        # only the recorded field name is omitted.
+        audit_change(request, action, record, changes if audit_fields is None else audit_fields)
         return redirect("cases:detail", pk=case_id)
     return form_response(request, form, title, **context)
 
@@ -819,4 +834,305 @@ def task_complete(request, pk, task_pk):
         "task.complete",
         pk,
         fixed_changes={"status": Task.Status.DONE, "completed_at": timezone.now()},
+    )
+
+
+def overdue_filter(queryset, model, now=None):
+    """Unfinished work whose due instant has passed (TASK-03, DATE-02).
+
+    Overdue is "due before now and not finished", so completed or cancelled work
+    never counts however old it is.
+    """
+    finished = (
+        [Task.Status.DONE]
+        if model is Task
+        else [Deadline.Status.COMPLETED, Deadline.Status.CANCELLED]
+    )
+    return queryset.filter(due_at__lt=now or timezone.now()).exclude(status__in=finished)
+
+
+@login_required
+@require_safe
+def work_index(request):
+    """Personal work list, defaulting to the signed-in user's own open tasks.
+
+    Administrators and attorneys can widen the assignee filter to anyone they
+    share a case with; the queryset still starts from `tasks_visible_to`, so
+    widening it never reaches a case the viewer cannot see.
+    """
+    user = request.user
+    tasks = tasks_visible_to(user).filter(is_archived=False)
+    colleagues = User.objects.filter(pk__in=tasks.values("assignee_id")).order_by("full_name", "pk")
+    form = WorkFilterForm(request.GET or None, choices=colleagues)
+    page = None
+    if not request.GET:
+        # No filters submitted: show my own work, which is the common case.
+        tasks = tasks.filter(assignee=user)
+        form = WorkFilterForm(choices=colleagues, initial={"assignee": user.pk})
+        page = Paginator(tasks.order_by("due_at", "pk"), 25).get_page(1)
+    elif form.is_valid():
+        data = form.cleaned_data
+        if data["assignee"]:
+            tasks = tasks.filter(assignee=data["assignee"])
+        if data["status"]:
+            tasks = tasks.filter(status=data["status"])
+        if data["priority"]:
+            tasks = tasks.filter(priority=data["priority"])
+        if data["overdue"]:
+            tasks = overdue_filter(tasks, Task)
+        paginator = Paginator(tasks.select_related("case", "assignee").order_by("due_at", "pk"), 25)
+        number = data["page"] or 1
+        if number > paginator.num_pages:
+            form.add_error("page", "This page does not exist.")
+        else:
+            page = paginator.page(number)
+    if page is not None:
+        audit_event(request, "task.list", "task")
+    return render(
+        request,
+        "cases/work.html",
+        {"form": form, "page": page, "now": timezone.now()},
+    )
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def task_edit(request, pk, task_pk):
+    """Update a task's own details, leaving its assignee and status untouched."""
+    case = case_for_action(request, pk, Action.ASSIGN_TASKS)
+    task = get_object_or_404(
+        tasks_visible_to(request.user), case=case, pk=task_pk, is_archived=False
+    )
+    require_editable(case)
+    form = TaskDetailsForm(
+        request.POST if request.method == "POST" else None,
+        initial={
+            "revision": task.revision,
+            "title": task.title,
+            "description": task.description,
+            "priority": task.priority,
+            "due_at": task.due_at,
+        },
+    )
+    return revision_response(request, form, "Edit task", task, "task.edit", pk)
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def task_status(request, pk, task_pk):
+    """Move a task between statuses, recording completion time on `Done`.
+
+    Only the assignee may change status, matching the permission matrix's
+    "own tasks" rule. The transition is rechecked here because the form's
+    choices are presentation, not authorization.
+    """
+    case = case_for_action(request, pk, Action.COMPLETE_TASK)
+    task = get_object_or_404(
+        tasks_visible_to(request.user), case=case, pk=task_pk, is_archived=False
+    )
+    require_editable(case)
+    if not can_complete_task(request.user, task):
+        raise PermissionDenied
+    form = TaskStatusForm(
+        request.POST if request.method == "POST" else None,
+        current=task.status,
+        initial={"revision": task.revision},
+    )
+    if form.is_valid():
+        target = form.cleaned_data["status"]
+        if not allows(TASK_TRANSITIONS, task.status, target):
+            form.add_error("status", "This status change is not allowed.")
+            return form_response(request, form, "Change task status")
+        return revision_response(
+            request,
+            form,
+            "Change task status",
+            task,
+            "task.status",
+            pk,
+            # Completion time is set on Done and cleared on reopen, so the
+            # database's task_completion_matches_status constraint always holds.
+            fixed_changes={
+                "status": target,
+                "completed_at": timezone.now() if target == Task.Status.DONE else None,
+            },
+        )
+    return form_response(request, form, "Change task status")
+
+
+def upcoming_filter(queryset, now=None):
+    """Pending work due from now through the end of firm-local day +7, inclusive.
+
+    The window is computed in the firm timezone and then converted back, so the
+    boundary lands on a real local midnight rather than a UTC one. That keeps the
+    edge correct across daylight-saving changes.
+    """
+    now = now or timezone.now()
+    firm_day = timezone.localtime(now).date() + timedelta(days=7)
+    end = timezone.make_aware(datetime.combine(firm_day, time.max), timezone.get_default_timezone())
+    return queryset.filter(due_at__gte=now, due_at__lte=end)
+
+
+@login_required
+@require_safe
+def deadline_index(request):
+    """Authorized deadline list with overdue and upcoming windows (DATE-02)."""
+    user = request.user
+    deadlines = deadlines_visible_to(user).filter(is_archived=False)
+    colleagues = User.objects.filter(pk__in=deadlines.values("responsible_user_id")).order_by(
+        "full_name", "pk"
+    )
+    form = DeadlineFilterForm(request.GET or None, choices=colleagues)
+    page = None
+    if not request.GET:
+        form = DeadlineFilterForm(choices=colleagues)
+        page = Paginator(deadlines.order_by("due_at", "pk"), 25).get_page(1)
+    elif form.is_valid():
+        data = form.cleaned_data
+        if data["responsible_user"]:
+            deadlines = deadlines.filter(responsible_user=data["responsible_user"])
+        if data["status"]:
+            deadlines = deadlines.filter(status=data["status"])
+        if data["type"]:
+            deadlines = deadlines.filter(type=data["type"])
+        if data["window"] == "overdue":
+            deadlines = overdue_filter(deadlines, Deadline)
+        elif data["window"] == "upcoming":
+            deadlines = upcoming_filter(deadlines.filter(status=Deadline.Status.PENDING))
+        paginator = Paginator(
+            deadlines.select_related("case", "responsible_user").order_by("due_at", "pk"), 25
+        )
+        number = data["page"] or 1
+        if number > paginator.num_pages:
+            form.add_error("page", "This page does not exist.")
+        else:
+            page = paginator.page(number)
+    if page is not None:
+        audit_event(request, "deadline.list", "deadline")
+    return render(
+        request,
+        "cases/deadlines.html",
+        {"form": form, "page": page, "now": timezone.now()},
+    )
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def deadline_create(request, pk):
+    """Record a new pending deadline against an editable case (DATE-01)."""
+    case = case_for_action(request, pk, Action.ASSIGN_TASKS)
+    require_editable(case)
+    form = DeadlineForm(request.POST if request.method == "POST" else None, case=case)
+    if form.is_valid():
+        deadline = form.save(commit=False)
+        lock_assignee_membership(case, deadline.responsible_user)
+        deadline.case = case
+        deadline.created_by = request.user
+        deadline.save()
+        audit_change(request, "deadline.create", deadline, ["title", "type", "due_at"])
+        return redirect("cases:detail", pk=pk)
+    return form_response(request, form, "Add deadline")
+
+
+def deadline_for_action(request, pk, deadline_pk, action):
+    """Fetch an editable deadline through the viewer's own scope, or 404."""
+    case = case_for_action(request, pk, action)
+    deadline = get_object_or_404(
+        deadlines_visible_to(request.user), case=case, pk=deadline_pk, is_archived=False
+    )
+    require_editable(case)
+    return case, deadline
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def deadline_edit(request, pk, deadline_pk):
+    """Revise a pending deadline's details, including moving its date."""
+    case, deadline = deadline_for_action(request, pk, deadline_pk, Action.ASSIGN_TASKS)
+    form = DeadlineDetailsForm(
+        request.POST if request.method == "POST" else None,
+        case=case,
+        initial={
+            "revision": deadline.revision,
+            "title": deadline.title,
+            "type": deadline.type,
+            "due_at": deadline.due_at,
+            "responsible_user": deadline.responsible_user_id,
+            "notes": deadline.notes,
+        },
+    )
+    if form.is_valid():
+        lock_assignee_membership(case, form.cleaned_data["responsible_user"])
+    return revision_response(request, form, "Edit deadline", deadline, "deadline.edit", pk)
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def deadline_resolve(request, pk, deadline_pk):
+    """Complete or cancel a deadline, recording actor, instant and reason."""
+    case, deadline = deadline_for_action(request, pk, deadline_pk, Action.ASSIGN_TASKS)
+    if deadline.status != Deadline.Status.PENDING:
+        return HttpResponse("This deadline is already resolved.", status=409)
+    form = DeadlineResolutionForm(
+        request.POST if request.method == "POST" else None,
+        initial={"revision": deadline.revision},
+    )
+    if form.is_valid():
+        target = form.cleaned_data["status"]
+        if not allows(DEADLINE_TRANSITIONS, deadline.status, target):
+            form.add_error("status", "This status change is not allowed.")
+            return form_response(request, form, "Resolve deadline")
+        return revision_response(
+            request,
+            form,
+            "Resolve deadline",
+            deadline,
+            "deadline.resolve",
+            pk,
+            # completion_notes is not an allowlisted audit field name; the reason
+            # itself lives on the deadline record, where DATE-01 wants it.
+            audit_fields=["status", "completed_at", "completed_by"],
+            fixed_changes={
+                "status": target,
+                "completed_at": timezone.now(),
+                "completed_by": request.user,
+                "completion_notes": form.cleaned_data["completion_notes"],
+            },
+        )
+    return form_response(request, form, "Resolve deadline")
+
+
+@login_required
+@require_http_methods(FORM_METHODS)
+@transaction.atomic
+def deadline_reopen(request, pk, deadline_pk):
+    """Return a resolved deadline to pending, clearing its completion details."""
+    case, deadline = deadline_for_action(request, pk, deadline_pk, Action.ASSIGN_TASKS)
+    if deadline.status == Deadline.Status.PENDING:
+        return HttpResponse("This deadline is already pending.", status=409)
+    form = RevisionForm(
+        request.POST if request.method == "POST" else None, initial={"revision": deadline.revision}
+    )
+    return revision_response(
+        request,
+        form,
+        "Reopen deadline",
+        deadline,
+        "deadline.reopen",
+        pk,
+        # completion_notes is not an allowlisted audit field name; the reason
+        # itself lives on the deadline record, where DATE-01 wants it.
+        audit_fields=["status", "completed_at", "completed_by"],
+        # Clearing all three keeps deadline_completion_consistent satisfied.
+        fixed_changes={
+            "status": Deadline.Status.PENDING,
+            "completed_at": None,
+            "completed_by": None,
+            "completion_notes": "",
+        },
     )
