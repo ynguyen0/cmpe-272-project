@@ -1,8 +1,13 @@
 """LOG-01: the audit helper records, redacts, and commits with its mutation."""
 
+import os
 import uuid
+from io import StringIO
+from unittest.mock import patch
 
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
+from django.db.models import Max
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
@@ -15,6 +20,7 @@ from audit.services import (
     get_correlation_id,
     record_event,
 )
+from cases.models import Case
 
 PASSWORD = "Fictional-audit-passphrase-73!"
 
@@ -273,3 +279,43 @@ class AppendOnlyThroughTheHelperTests(TestCase):
                 operation()
         event.refresh_from_db()
         self.assertEqual(event.result, "success")
+
+
+class SharedCorrelationIdTests(TestCase):
+    """Every event raised while handling one request must share its correlation id.
+
+    The case and client views record through `cases.services.audit_event`, which
+    used to mint a fresh uuid4 per event. That made the column useless for
+    grouping what a single request did, which is exactly what LOG-01 wants it for.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        with patch.dict(os.environ, {"LEXFLOW_DEMO_PASSWORD": PASSWORD}):
+            call_command("seed_demo", stdout=StringIO())
+        cls.attorney = User.objects.get(email="attorney.a@example.test")
+
+    def test_one_request_produces_one_correlation_id(self):
+        self.client.force_login(self.attorney)
+        mark = AuditEvent.objects.aggregate(top=Max("pk"))["top"] or 0
+
+        case = Case.objects.get(number="DEMO-ALPHA")
+        response = self.client.get(reverse("cases:detail", args=[case.pk]))
+        self.assertEqual(response.status_code, 200)
+
+        produced = AuditEvent.objects.filter(pk__gt=mark)
+        self.assertGreaterEqual(produced.count(), 1)
+        self.assertEqual(
+            produced.values("correlation_id").distinct().count(),
+            1,
+            "events from a single request must share one correlation id",
+        )
+
+    def test_separate_requests_do_not_share_an_id(self):
+        self.client.force_login(self.attorney)
+        mark = AuditEvent.objects.aggregate(top=Max("pk"))["top"] or 0
+        case = Case.objects.get(number="DEMO-ALPHA")
+        self.client.get(reverse("cases:detail", args=[case.pk]))
+        self.client.get(reverse("cases:detail", args=[case.pk]))
+        produced = AuditEvent.objects.filter(pk__gt=mark)
+        self.assertEqual(produced.values("correlation_id").distinct().count(), 2)

@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from audit.models import AuditEvent
+from audit.services import record_event
 from clients.models import Client
 from config.models import ConcurrentEditError
 from work.models import Deadline, Task
@@ -264,13 +265,25 @@ def audit_change(request, action, record, fields=()):
 def audit_event(
     request, action, resource_type, resource_id="", fields=(), *, result=AuditEvent.Result.SUCCESS
 ):
-    return AuditEvent.objects.create(
-        actor=request.user,
+    """Record one event through the shared writer (LOG-01).
+
+    Delegating to :func:`audit.services.record_event` keeps every event raised by
+    one request on that request's correlation id. Creating the row here with a
+    fresh ``uuid4()`` gave each event its own id, which made the column useless
+    for grouping what a single request did.
+
+    The shared writer also rejects a field name that is not allowlisted instead
+    of silently dropping it, so a mistake surfaces during development rather
+    than leaving a quietly incomplete audit trail.
+    """
+    actor = getattr(request, "user", None)
+    if actor is not None and not actor.is_authenticated:
+        actor = None
+    return record_event(
+        actor=actor,
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
         result=result,
-        correlation_id=uuid4(),
-        # Audit change names are limited by the existing append-only schema.
-        changed_fields=[field for field in fields if field in AuditEvent.CHANGE_FIELDS],
+        changed_fields=fields,
     )
