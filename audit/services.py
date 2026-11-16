@@ -98,6 +98,37 @@ class Action:
     # Audit review (LOG-02).
     AUDIT_LOG_READ = "audit_log.read"
 
+    # Baseline entries for the client, case, document, task and deadline screens.
+    # Extend this list rather than passing a bare string, so the LOG-02 action
+    # filter stays meaningful.
+    CLIENT_CREATED = "client.created"
+    CLIENT_UPDATED = "client.updated"
+    CLIENT_READ = "client.read"
+    CLIENT_SEARCHED = "client.searched"
+    CLIENT_ARCHIVED = "client.archived"
+    CASE_CREATED = "case.created"
+    CASE_UPDATED = "case.updated"
+    CASE_READ = "case.read"
+    CASE_SEARCHED = "case.searched"
+    CASE_STATUS_CHANGED = "case.status_changed"
+    CASE_CLIENT_LINKED = "case_client.linked"
+    CASE_CLIENT_UNLINKED = "case_client.unlinked"
+    CASE_MEMBER_ASSIGNED = "case_membership.assigned"
+    CASE_MEMBER_REMOVED = "case_membership.unlinked"
+    DOCUMENT_UPLOADED = "document.uploaded"
+    DOCUMENT_DOWNLOADED = "document.downloaded"
+    DOCUMENT_UPDATED = "document.updated"
+    DOCUMENT_READ = "document.read"
+    DOCUMENT_ARCHIVED = "document.archived"
+    TASK_CREATED = "task.created"
+    TASK_UPDATED = "task.updated"
+    TASK_READ = "task.read"
+    TASK_STATUS_CHANGED = "task.status_changed"
+    DEADLINE_CREATED = "deadline.created"
+    DEADLINE_UPDATED = "deadline.updated"
+    DEADLINE_READ = "deadline.read"
+    DEADLINE_STATUS_CHANGED = "deadline.status_changed"
+
 
 def new_correlation_id() -> uuid.UUID:
     """Return a fresh correlation ID. The middleware calls this once per request."""

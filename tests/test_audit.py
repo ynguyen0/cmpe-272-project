@@ -71,8 +71,18 @@ class RecordEventTests(TestCase):
 class RedactionTests(TestCase):
     """LOG-01: only allowlisted field *names* are stored, never submitted values."""
 
+    def test_allowlisted_names_record_that_a_field_changed_not_its_contents(self):
+        """Recording "notes changed" is accountability; the text itself is never stored."""
+        event = record_event(
+            action=Action.CLIENT_UPDATED,
+            resource_type=Resource.CLIENT,
+            result=AuditEvent.Result.SUCCESS,
+            changed_fields=["notes", "phone", "address"],
+        )
+        self.assertEqual(event.changed_fields, ["address", "notes", "phone"])
+
     def test_rejects_field_names_outside_the_allowlist(self):
-        for bad in ["password", "token", "notes", "file", "secret"]:
+        for bad in ["password", "token", "file", "secret", "session_key"]:
             with self.subTest(field=bad), self.assertRaisesMessage(ValueError, "Not allowlisted"):
                 record_event(
                     action=Action.USER_UPDATED,
