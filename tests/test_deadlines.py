@@ -118,8 +118,16 @@ class DeadlineCreateTests(DeadlineTestCase):
 
 class DeadlineEditTests(DeadlineTestCase):
     def test_moving_the_date_is_saved_and_recorded(self):
+        """The submitted value is naive, so Django reads it in the firm timezone.
+
+        Both sides of the comparison therefore work in firm-local time. Using the
+        UTC instant instead passes only on a machine already in that timezone,
+        and fails wherever CI happens to run.
+        """
         self.client.force_login(self.attorney)
-        moved = (timezone.now() + timedelta(days=30)).replace(microsecond=0)
+        moved = (timezone.localtime(timezone.now()) + timedelta(days=30)).replace(
+            second=0, microsecond=0
+        )
         response = self.client.post(
             self.url("cases:deadline_edit", self.deadline.pk),
             {
@@ -133,7 +141,9 @@ class DeadlineEditTests(DeadlineTestCase):
         )
         self.assertRedirects(response, reverse("cases:detail", args=[self.alpha.pk]))
         self.deadline.refresh_from_db()
-        self.assertEqual(self.deadline.due_at.date(), moved.date())
+        self.assertEqual(
+            timezone.localtime(self.deadline.due_at).replace(second=0, microsecond=0), moved
+        )
         event = self.new_events().get(action="deadline.edit")
         self.assertIn("due_at", event.changed_fields)
 
