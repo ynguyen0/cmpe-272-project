@@ -1,56 +1,69 @@
 {% extends 'base.html' %}
+{% block title %}My cases · LexFlow{% endblock %}
 {% block content %}
-<h1 class="h3">My cases</h1>
-<div class="d-flex flex-wrap gap-3 mb-3">
-  <a href="{% url 'cases:clients' %}">Clients</a>
-  {% if can_create %}<a href="{% url 'cases:create' %}">Create case</a>{% endif %}
-  {% if can_view_audit %}<a href="{% url 'cases:audit' %}">Audit records</a>{% endif %}
-</div>
-<dl class="d-flex flex-wrap gap-3">
-  {% for label, total in totals.items %}
-    <div class="border rounded bg-white px-3 py-2">
-      <dt>{{ label }}</dt><dd class="mb-0">{{ total }}</dd>
-    </div>
-  {% endfor %}
-</dl>
-<form method="get" class="mb-3">
-  {{ form.non_field_errors }}
-  <div class="d-flex flex-wrap align-items-end gap-3">
-    <div>{{ form.q.label_tag }} {{ form.q }} {{ form.q.errors }}</div>
+<header class="case-masthead">
+  <div class="case-heading">
+    <h1>My cases</h1>
+    {% if can_create or can_view_audit %}
+      <div class="page-actions">
+        {% if can_view_audit %}<a href="{% url 'cases:audit' %}">Audit records</a>{% endif %}
+        {% if can_create %}<a class="btn btn-primary" href="{% url 'cases:create' %}"><span aria-hidden="true">+</span> Create case</a>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+  <dl class="case-totals" aria-label="Workspace totals">
+    {% for label, total in totals.items %}
+      <div><dt>{{ label }}</dt><dd>{{ total }}</dd></div>
+    {% endfor %}
+  </dl>
+</header>
+
+<section class="register-section register-sheet" aria-labelledby="register-heading">
+  <div class="register-heading">
+    <h2 id="register-heading">Case records</h2>
+    {% if page is not None %}
+      <p>{{ page.paginator.count }} result{{ page.paginator.count|pluralize }}</p>
+    {% endif %}
+  </div>
+  <form method="get" class="record-filters case-filters">
+    {{ form.non_field_errors }}
+    <div class="case-query">{{ form.q.label_tag }} {{ form.q }} {{ form.q.errors }}</div>
     <div>{{ form.status.label_tag }} {{ form.status }} {{ form.status.errors }}</div>
     <div>{{ form.type.label_tag }} {{ form.type }} {{ form.type.errors }}</div>
-    <div>{{ form.sort.label_tag }} {{ form.sort }} {{ form.sort.errors }}</div>
-    <button type="submit" class="btn btn-secondary btn-sm">Search</button>
-  </div>
-  {{ form.page.errors }}
-</form>
-{% if page is not None %}
-  <div class="table-responsive">
-    <table class="table table-striped bg-white">
-      <caption>Cases you are authorized to view</caption>
-      <thead><tr>
-        <th scope="col">Reference</th><th scope="col">Title</th><th scope="col">Type</th>
-        <th scope="col">Status</th><th scope="col">Opened</th>
-      </tr></thead>
-      <tbody>
-      {% for case in page %}
-        <tr>
-          <td><a href="{% url 'cases:detail' case.pk %}">{{ case.number }}</a></td>
-          <td>{{ case.title }}</td><td>{{ case.type }}</td>
-          <td>{% if case.is_archived %}Archived{% else %}{{ case.status }}{% endif %}</td>
-          <td>{{ case.opened_on|date:"Y-m-d" }}</td>
-        </tr>
-      {% empty %}<tr><td colspan="5">No matching cases.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% if page.has_other_pages %}
-    <nav aria-label="Case results pages" class="d-flex gap-3">
-      {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}">Previous</a>{% endif %}
-      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
-      {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}">Next</a>{% endif %}
-    </nav>
+    <div class="case-sort">{{ form.sort.label_tag }} {{ form.sort }} {{ form.sort.errors }}</div>
+    <button type="submit" class="btn btn-secondary">Search</button>
+    {{ form.page.errors }}
+  </form>
+  {% if page is not None %}
+    <div class="table-responsive">
+      <table class="table record-table case-table" role="table">
+        <caption class="visually-hidden">Cases you are authorized to view</caption>
+        <thead role="rowgroup"><tr role="row">
+          <th scope="col" role="columnheader">Reference</th><th scope="col" role="columnheader">Title</th><th scope="col" role="columnheader">Type</th>
+          <th scope="col" role="columnheader">Status</th><th scope="col" role="columnheader">Opened</th>
+        </tr></thead>
+        <tbody role="rowgroup">
+        {% for case in page %}
+          {% with archived_status=case.is_archived|yesno:"Archived," %}
+            <tr role="row">
+              <td role="cell" class="case-reference"><a class="record-ref" href="{% url 'cases:detail' case.pk %}">{{ case.number }}</a></td>
+              <td role="cell" class="record-title">{{ case.title }}</td><td role="cell">{{ case.type }}</td>
+              <td role="cell"><span class="record-status" data-status="{{ archived_status|default:case.status }}">{{ archived_status|default:case.status }}</span></td>
+              <td role="cell" class="record-date">{{ case.opened_on|date:"Y-m-d" }}</td>
+            </tr>
+          {% endwith %}
+        {% empty %}<tr role="row"><td role="cell" class="record-empty" colspan="5">No matching cases.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page.has_other_pages %}
+      <nav aria-label="Case results pages" class="record-pagination">
+        {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}">Previous</a>{% endif %}
+        <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
   {% endif %}
-{% endif %}
+</section>
 {% endblock %}

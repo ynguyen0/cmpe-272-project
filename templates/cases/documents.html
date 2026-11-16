@@ -2,22 +2,24 @@
 {% block title %}Documents · LexFlow{% endblock %}
 {% block content %}
 <a href="{% url 'cases:detail' case.pk %}">Back to case</a>
-<h1 class="h3 mt-3">Documents</h1>
-<p>{{ case.number }} · {{ case.title }}</p>
-{% if can_manage_documents %}<p><a href="{% url 'cases:document_upload' case.pk %}">Upload document</a></p>{% endif %}
-<form method="get" class="mb-3">
-  {{ form.non_field_errors }}
-  <div class="d-flex flex-wrap gap-3 align-items-end">
-    <div>{{ form.category.label_tag }} {{ form.category }} {{ form.category.errors }}</div>
-    <div>{{ form.state.label_tag }} {{ form.state }} {{ form.state.errors }}</div>
-    <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
+<header class="case-heading mt-3 mb-4">
+  <div>
+    <h1>Documents</h1>
+    <p class="mb-0 mt-2">{{ case.number }} · {{ case.title }}</p>
   </div>
+  {% if can_manage_documents %}<a class="btn btn-primary" href="{% url 'cases:document_upload' case.pk %}"><span aria-hidden="true">+</span> Upload document</a>{% endif %}
+</header>
+<form method="get" class="register-sheet record-filters mb-3">
+  {{ form.non_field_errors }}
+  <div>{{ form.category.label_tag }} {{ form.category }} {{ form.category.errors }}</div>
+  <div>{{ form.state.label_tag }} {{ form.state }} {{ form.state.errors }}</div>
+  <button class="btn btn-secondary" type="submit">Filter</button>
   {{ form.page.errors }}
 </form>
 {% if page is not None %}
   <div class="vstack gap-3">
     {% for document in page %}
-      <article class="card card-body">
+      <article class="document-record">
         <h2 class="h5">{{ document.title }}</h2>
         <p class="mb-2">{{ document.category }} · {{ document.original_filename }} · {{ document.size|filesizeformat }}</p>
         {% if document.description %}<p class="mb-2">{{ document.description|linebreaksbr }}</p>{% endif %}

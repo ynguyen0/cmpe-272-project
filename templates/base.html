@@ -6,27 +6,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}LexFlow{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'lexflow/firm.css' %}">
 </head>
-<body class="bg-light">
-  <a href="#main" class="visually-hidden-focusable">Skip to content</a>
-  <nav class="navbar navbar-dark bg-dark" aria-label="Main navigation">
-    <div class="container d-flex flex-wrap gap-3">
-      <a class="navbar-brand" href="{% url 'cases:index' %}">LexFlow</a>
-      {% if user.is_authenticated %}
-        <span class="text-white">{{ user.full_name }} · {{ user.role }}</span>
-        <div class="d-flex flex-wrap align-items-center gap-3">
-        {% if user.is_administrator %}
-          <a class="link-light" href="{% url 'accounts:list' %}">Accounts</a>
+<body class="{% if user.is_authenticated %}firm-workspace{% else %}firm-guest{% endif %} {% block body_class %}{% endblock %}">
+  <a href="#main" class="skip-link visually-hidden-focusable">Skip to content</a>
+  <header class="firm-header">
+    {% with route=request.resolver_match.url_name namespace=request.resolver_match.namespace %}
+      <nav class="navbar firm-nav" aria-label="Main navigation">
+        <a class="firm-brand" href="{% url 'cases:index' %}">
+          <span class="firm-mark" aria-hidden="true">L</span>
+          <span>LexFlow</span>
+        </a>
+        {% if user.is_authenticated %}
+          <div class="firm-links">
+            <a href="{% url 'cases:index' %}"{% if route == 'index' %} aria-current="page"{% elif namespace == 'cases' and route|slice:":6" != 'client' %} aria-current="location"{% endif %}>Cases</a>
+            <a href="{% url 'cases:clients' %}"{% if route == 'clients' %} aria-current="page"{% elif route|slice:":6" == 'client' %} aria-current="location"{% endif %}>Clients</a>
+            {% if user.is_administrator %}
+              <a href="{% url 'accounts:list' %}"{% if namespace == 'accounts' and route == 'list' %} aria-current="page"{% elif namespace == 'accounts' and route == 'create' or namespace == 'accounts' and route == 'access' %} aria-current="location"{% endif %}>Accounts</a>
+            {% endif %}
+          </div>
+          <div class="firm-account">
+            <div class="firm-identity">
+              <span class="firm-initial" aria-hidden="true">{{ user.full_name|first }}</span>
+              <div><strong>{{ user.full_name }}</strong><span>{{ user.role }}</span></div>
+            </div>
+            <div class="firm-account-actions">
+              <a href="{% url 'accounts:password_change' %}">Change password</a>
+              <form method="post" action="{% url 'accounts:logout' %}">
+                {% csrf_token %}<button type="submit">Sign out</button>
+              </form>
+            </div>
+          </div>
         {% endif %}
-        <a class="link-light" href="{% url 'accounts:password_change' %}">Change password</a>
-        <form method="post" action="{% url 'accounts:logout' %}">
-          {% csrf_token %}<button class="btn btn-outline-light" type="submit">Sign out</button>
-        </form>
-        </div>
-      {% endif %}
-    </div>
-  </nav>
-  <main id="main" class="container py-4">
+      </nav>
+    {% endwith %}
+  </header>
+  <main id="main" class="firm-main" tabindex="-1">
     {% for message in messages %}<div class="alert alert-success" role="status">{{ message }}</div>{% endfor %}
     {% block content %}{% endblock %}
   </main>

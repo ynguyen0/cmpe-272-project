@@ -1,88 +1,125 @@
 {% extends 'base.html' %}
+{% block title %}{{ case.title }} · LexFlow{% endblock %}
 {% block content %}
 <a href="{% url 'cases:index' %}">Back to cases</a>
 <h1 class="h3 mt-3">{{ case.title }}</h1>
-<dl>
-  <dt>Case reference</dt><dd>{{ case.number }}</dd>
-  <dt>Type</dt><dd>{{ case.type }}</dd>
-  <dt>Status</dt><dd>{% if case.is_archived %}Archived{% else %}{{ case.status }}{% endif %}</dd>
-  <dt>Court docket number</dt><dd>{{ case.court_docket_number|default:'—' }}</dd>
-  <dt>Opened</dt><dd>{{ case.opened_on|date:"Y-m-d" }}</dd>
-  <dt>Closed</dt><dd>{{ case.closed_on|date:"Y-m-d"|default:"—" }}</dd>
-  <dt>Responsible attorney</dt><dd>{{ case.responsible_attorney.full_name }}</dd>
-  <dt>Description</dt><dd>{{ case.summary|default:"—"|linebreaksbr }}</dd>
+<dl class="record-meta">
+  <div>
+    <dt>Case reference</dt>
+    <dd>{{ case.number }}</dd>
+  </div>
+  <div>
+    <dt>Type</dt>
+    <dd>{{ case.type }}</dd>
+  </div>
+  <div>
+    <dt>Status</dt>
+    <dd>{% if case.is_archived %}Archived{% else %}{{ case.status }}{% endif %}</dd>
+  </div>
+  <div>
+    <dt>Court docket number</dt>
+    <dd>{{ case.court_docket_number|default:'—' }}</dd>
+  </div>
+  <div>
+    <dt>Opened</dt>
+    <dd>{{ case.opened_on|date:"Y-m-d" }}</dd>
+  </div>
+  <div>
+    <dt>Closed</dt>
+    <dd>{{ case.closed_on|date:"Y-m-d"|default:"—" }}</dd>
+  </div>
+  <div>
+    <dt>Responsible attorney</dt>
+    <dd>{{ case.responsible_attorney.full_name }}</dd>
+  </div>
+  <div class="record-meta-wide">
+    <dt>Description</dt>
+    <dd>{{ case.summary|default:"—"|linebreaksbr }}</dd>
+  </div>
 </dl>
-<div class="d-flex flex-wrap gap-3 mb-3">
+<div class="page-actions">
   {% if can_edit %}<a href="{% url 'cases:edit' case.pk %}">Edit case details</a>{% endif %}
   {% if can_change_status %}
     <a href="{% url 'cases:status' case.pk %}">{% if case.status == "Closed" %}Reopen case{% else %}Update case status{% endif %}</a>
   {% endif %}
   {% if can_archive %}<a href="{% url 'cases:archive' case.pk %}">Archive case</a>{% endif %}
 </div>
-<h2 class="h5">Clients</h2>
-{% if can_link_clients %}<p><a href="{% url 'cases:link_client' case.pk %}">Link client</a></p>{% endif %}
-<ul>
-  {% for client_record in clients %}
-    <li><a href="{% url 'cases:client_detail' client_record.pk %}">{{ client_record.name }}</a>
-      {% if client_record.status == 'Archived' %}(archived){% endif %}
-    </li>
-  {% empty %}
-    <li>No linked clients.</li>
-  {% endfor %}
-</ul>
-<h2 class="h5">Team</h2>
-{% if can_manage_team %}<p><a href="{% url 'cases:team' case.pk %}">Edit case team</a></p>{% endif %}
-<ul>
-  {% for member in team %}
-    <li>{{ member.user.full_name }} · {{ member.responsibility }}{% if not member.user.is_active %} (inactive account){% endif %}</li>
-  {% empty %}
-    <li>No assigned team members.</li>
-  {% endfor %}
-</ul>
-<h2 class="h5">Documents</h2>
-<p class="d-flex flex-wrap gap-3">
-  <a href="{% url 'cases:documents' case.pk %}">All case documents</a>
-  {% if can_manage_documents %}<a href="{% url 'cases:document_upload' case.pk %}">Upload document</a>{% endif %}
-</p>
-<ul>
-  {% for document in documents %}
-    <li>
-      {% if require_document_scan and not document.malware_scanned_at %}
-        {{ document.title }} · Awaiting malware scan
-      {% else %}
-        <a href="{% url 'cases:document_download' case.pk document.pk %}">{{ document.title }}</a>
-      {% endif %}
-      · {{ document.category }}
-      {% if can_manage_documents %}· <a href="{% url 'cases:document_edit' case.pk document.pk %}">Edit details</a>{% endif %}
-    </li>
-  {% empty %}
-    <li>No active documents.</li>
-  {% endfor %}
-</ul>
-<h2 class="h5">Tasks</h2>
-{% if can_assign %}<p><a href="{% url 'cases:task_assign' case.pk %}">Assign task</a></p>{% endif %}
-<ul>
-  {% for task, can_complete in task_rows %}
-    <li>
-      {{ task.title }} · {{ task.assignee.full_name }} · {{ task.status }} · {{ task.due_at|date:"Y-m-d H:i" }}
-      {% if task.is_archived %}(archived)
-      {% elif can_assign and task.status != 'Done' %}· <a href="{% url 'cases:task_reassign' case.pk task.pk %}">Reassign</a>{% endif %}
-      {% if can_complete %}· <a href="{% url 'cases:task_complete' case.pk task.pk %}">Complete</a>{% endif %}
-    </li>
-  {% empty %}
-    <li>No tasks.</li>
-  {% endfor %}
-</ul>
-<h2 class="h5">Deadlines</h2>
-<ul>
-  {% for deadline in deadlines %}
-    <li>
-      {{ deadline.title }} · {{ deadline.type }} · {{ deadline.due_at|date:"Y-m-d H:i" }}
-      · {{ deadline.responsible_user.full_name }} · {{ deadline.status }}
-      {% if deadline.is_archived %}(archived){% endif %}
-    </li>
-  {% empty %}
-    <li>No deadlines.</li>
-  {% endfor %}
-</ul>
+<div class="case-sections">
+  <section>
+    <h2>Clients</h2>
+    {% if can_link_clients %}<p><a href="{% url 'cases:link_client' case.pk %}">Link client</a></p>{% endif %}
+    <ul>
+      {% for client_record in clients %}
+        <li><a href="{% url 'cases:client_detail' client_record.pk %}">{{ client_record.name }}</a>
+          {% if client_record.status == 'Archived' %}(archived){% endif %}
+        </li>
+      {% empty %}
+        <li>No linked clients.</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section>
+    <h2>Team</h2>
+    {% if can_manage_team %}<p><a href="{% url 'cases:team' case.pk %}">Edit case team</a></p>{% endif %}
+    <ul>
+      {% for member in team %}
+        <li>{{ member.user.full_name }} · {{ member.responsibility }}{% if not member.user.is_active %} (inactive account){% endif %}</li>
+      {% empty %}
+        <li>No assigned team members.</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section>
+    <h2>Documents</h2>
+    <p class="d-flex flex-wrap gap-3">
+      <a href="{% url 'cases:documents' case.pk %}">All case documents</a>
+      {% if can_manage_documents %}<a href="{% url 'cases:document_upload' case.pk %}">Upload document</a>{% endif %}
+    </p>
+    <ul>
+      {% for document in documents %}
+        <li>
+          {% if require_document_scan and not document.malware_scanned_at %}
+            {{ document.title }} · Awaiting malware scan
+          {% else %}
+            <a href="{% url 'cases:document_download' case.pk document.pk %}">{{ document.title }}</a>
+          {% endif %}
+          · {{ document.category }}
+          {% if can_manage_documents %}· <a href="{% url 'cases:document_edit' case.pk document.pk %}">Edit details</a>{% endif %}
+        </li>
+      {% empty %}
+        <li>No active documents.</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section>
+    <h2>Tasks</h2>
+    {% if can_assign %}<p><a href="{% url 'cases:task_assign' case.pk %}">Assign task</a></p>{% endif %}
+    <ul>
+      {% for task, can_complete in task_rows %}
+        <li>
+          {{ task.title }} · {{ task.assignee.full_name }} · {{ task.status }} · {{ task.due_at|date:"Y-m-d H:i" }}
+          {% if task.is_archived %}(archived)
+          {% elif can_assign and task.status != 'Done' %}· <a href="{% url 'cases:task_reassign' case.pk task.pk %}">Reassign</a>{% endif %}
+          {% if can_complete %}· <a href="{% url 'cases:task_complete' case.pk task.pk %}">Complete</a>{% endif %}
+        </li>
+      {% empty %}
+        <li>No tasks.</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section>
+    <h2>Deadlines</h2>
+    <ul>
+      {% for deadline in deadlines %}
+        <li>
+          {{ deadline.title }} · {{ deadline.type }} · {{ deadline.due_at|date:"Y-m-d H:i" }}
+          · {{ deadline.responsible_user.full_name }} · {{ deadline.status }}
+          {% if deadline.is_archived %}(archived){% endif %}
+        </li>
+      {% empty %}
+        <li>No deadlines.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
 {% endblock %}

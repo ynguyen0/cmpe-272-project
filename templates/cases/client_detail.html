@@ -1,19 +1,41 @@
 {% extends 'base.html' %}
+{% block title %}{{ client_record.name }} · LexFlow{% endblock %}
 {% block content %}
 <a href="{% url 'cases:clients' %}">Back to clients</a>
 <h1 class="h3 mt-3">{{ client_record.name }}</h1>
-<div class="d-flex gap-3 mb-3">
+<div class="page-actions">
   {% if can_edit %}<a href="{% url 'cases:client_edit' client_record.pk %}">Edit client details</a>{% endif %}
   {% if can_archive %}<a href="{% url 'cases:client_archive' client_record.pk %}">Archive client</a>{% endif %}
 </div>
-<dl>
-  <dt>Client ID</dt><dd>#{{ client_record.pk }}</dd>
-  <dt>Type</dt><dd>{{ client_record.type }}</dd>
-  <dt>Status</dt><dd>{{ client_record.status }}</dd>
-  <dt>Email</dt><dd>{{ client_record.email|default:'—' }}</dd>
-  <dt>Phone</dt><dd>{{ client_record.phone|default:'—' }}</dd>
-  <dt>Address</dt><dd>{{ client_record.address|default:'—' }}</dd>
-  <dt>Notes</dt><dd>{{ client_record.notes|default:'—' }}</dd>
+<dl class="record-meta">
+  <div>
+    <dt>Client ID</dt>
+    <dd>#{{ client_record.pk }}</dd>
+  </div>
+  <div>
+    <dt>Type</dt>
+    <dd>{{ client_record.type }}</dd>
+  </div>
+  <div>
+    <dt>Status</dt>
+    <dd>{{ client_record.status }}</dd>
+  </div>
+  <div>
+    <dt>Email</dt>
+    <dd>{{ client_record.email|default:'—' }}</dd>
+  </div>
+  <div>
+    <dt>Phone</dt>
+    <dd>{{ client_record.phone|default:'—' }}</dd>
+  </div>
+  <div>
+    <dt>Address</dt>
+    <dd>{{ client_record.address|default:'—' }}</dd>
+  </div>
+  <div class="record-meta-wide">
+    <dt>Notes</dt>
+    <dd>{{ client_record.notes|default:'—' }}</dd>
+  </div>
 </dl>
 <h2 class="h5">Linked cases</h2>
 <ul>

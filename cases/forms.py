@@ -114,7 +114,7 @@ class CaseSearchForm(StrictFields, forms.Form):
     )
     status = forms.ChoiceField(
         required=False,
-        choices=[("", "All unarchived statuses"), *Case.Status.choices, ("archived", "Archived")],
+        choices=[("", "Unarchived"), *Case.Status.choices, ("archived", "Archived")],
     )
     type = forms.ChoiceField(required=False, choices=[("", "All types"), *Case.Type.choices])
     sort = forms.ChoiceField(
