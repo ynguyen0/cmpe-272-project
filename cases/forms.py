@@ -6,7 +6,7 @@ from clients.models import Client
 from clients.search import PHONE_INPUT, phone_digits
 from documents.models import Document
 from documents.validation import validate_upload
-from work.models import Task
+from work.models import Deadline, Task
 from work.transitions import TASK_TRANSITIONS
 
 from .models import Case
@@ -356,3 +356,77 @@ class WorkFilterForm(StrictFields, forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["assignee"].queryset = choices
         self.fields["assignee"].empty_label = "Anyone I can see"
+
+
+class DeadlineForm(StrictFields, forms.ModelForm):
+    """Record a new deadline on a case (DATE-01)."""
+
+    class Meta:
+        model = Deadline
+        fields = ("title", "type", "due_at", "responsible_user", "notes")
+        widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *args, case, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Responsibility stays inside the case team, which the composite
+        # foreign key also enforces at the database level.
+        self.fields["responsible_user"].queryset = eligible_assignees(case)
+
+
+class DeadlineDetailsForm(RevisionForm):
+    """Revise an existing deadline's fields (DATE-01)."""
+
+    title = forms.CharField(max_length=200)
+    type = forms.ChoiceField(choices=Deadline.Type.choices)
+    due_at = forms.DateTimeField()
+    responsible_user = forms.ModelChoiceField(queryset=User.objects.none())
+    notes = forms.CharField(
+        max_length=2000, required=False, widget=forms.Textarea(attrs={"rows": 3})
+    )
+
+    def __init__(self, *args, case, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["responsible_user"].queryset = eligible_assignees(case)
+
+
+class DeadlineResolutionForm(RevisionForm):
+    """Complete or cancel a deadline, which always requires a written reason.
+
+    DATE-01 makes resolution explicit: finishing related work never resolves a
+    deadline on its own, so the actor, the instant and the note are all recorded
+    here. The database's deadline_completion_consistent constraint rejects a
+    resolved row without them.
+    """
+
+    status = forms.ChoiceField(
+        choices=[
+            (Deadline.Status.COMPLETED, Deadline.Status.COMPLETED),
+            (Deadline.Status.CANCELLED, Deadline.Status.CANCELLED),
+        ]
+    )
+    completion_notes = forms.CharField(
+        max_length=500, widget=forms.Textarea(attrs={"rows": 3}), label="Reason"
+    )
+
+    def clean_completion_notes(self):
+        notes = self.cleaned_data["completion_notes"].strip()
+        if not notes:
+            raise forms.ValidationError("Give a reason for resolving this deadline.")
+        return notes
+
+
+class DeadlineFilterForm(StrictFields, forms.Form):
+    """Filters for the authorized deadline list."""
+
+    responsible_user = forms.ModelChoiceField(queryset=User.objects.none(), required=False)
+    status = forms.ChoiceField(choices=[("", "Any")] + Deadline.Status.choices, required=False)
+    type = forms.ChoiceField(choices=[("", "Any")] + Deadline.Type.choices, required=False)
+    window = forms.ChoiceField(
+        choices=[("", "All"), ("overdue", "Overdue"), ("upcoming", "Upcoming")], required=False
+    )
+    page = forms.IntegerField(min_value=1, required=False, widget=forms.HiddenInput)
+
+    def __init__(self, *args, choices, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["responsible_user"].queryset = choices
+        self.fields["responsible_user"].empty_label = "Anyone I can see"

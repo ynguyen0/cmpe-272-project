@@ -111,12 +111,22 @@
   </section>
   <section>
     <h2>Deadlines</h2>
+    {% if can_assign %}<p><a href="{% url 'cases:deadline_create' case.pk %}">Add deadline</a></p>{% endif %}
     <ul>
       {% for deadline in deadlines %}
         <li>
           {{ deadline.title }} · {{ deadline.type }} · {{ deadline.due_at|date:"Y-m-d H:i" }}
           · {{ deadline.responsible_user.full_name }} · {{ deadline.status }}
-          {% if deadline.is_archived %}(archived){% endif %}
+          {% if deadline.status == 'Pending' and deadline.due_at < now %}<span class="badge text-bg-danger">Overdue</span>{% endif %}
+          {% if deadline.is_archived %}(archived)
+          {% elif can_assign %}
+            · <a href="{% url 'cases:deadline_edit' case.pk deadline.pk %}">Edit deadline</a>
+            {% if deadline.status == 'Pending' %}
+              · <a href="{% url 'cases:deadline_resolve' case.pk deadline.pk %}">Resolve</a>
+            {% else %}
+              · <a href="{% url 'cases:deadline_reopen' case.pk deadline.pk %}">Reopen</a>
+            {% endif %}
+          {% endif %}
         </li>
       {% empty %}
         <li>No deadlines.</li>

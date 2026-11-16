@@ -41,4 +41,21 @@ urlpatterns = [
     path("cases/<int:pk>/tasks/<int:task_pk>/edit/", views.task_edit, name="task_edit"),
     path("cases/<int:pk>/tasks/<int:task_pk>/status/", views.task_status, name="task_status"),
     path("work/", views.work_index, name="work"),
+    path("deadlines/", views.deadline_index, name="deadlines"),
+    path("cases/<int:pk>/deadlines/add/", views.deadline_create, name="deadline_create"),
+    path(
+        "cases/<int:pk>/deadlines/<int:deadline_pk>/edit/",
+        views.deadline_edit,
+        name="deadline_edit",
+    ),
+    path(
+        "cases/<int:pk>/deadlines/<int:deadline_pk>/resolve/",
+        views.deadline_resolve,
+        name="deadline_resolve",
+    ),
+    path(
+        "cases/<int:pk>/deadlines/<int:deadline_pk>/reopen/",
+        views.deadline_reopen,
+        name="deadline_reopen",
+    ),
 ]
