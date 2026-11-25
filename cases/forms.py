@@ -515,6 +515,8 @@ class AuditFilterForm(StrictFields, forms.Form):
             if data[field]:
                 events = events.filter(**{field: data[field]})
         return events.order_by("-occurred_at", "-pk")
+
+
 class GlobalSearchForm(StrictFields, forms.Form):
     """One query across authorized cases and clients (DASH-01, issue #17)."""
 
