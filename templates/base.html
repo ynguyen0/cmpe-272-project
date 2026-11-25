@@ -6,20 +6,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}LexFlow{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
-  <link rel="stylesheet" href="{% static 'lexflow/firm.css' %}">
+  <link rel="stylesheet" href="{% static 'lexflow/firm.css' %}?v=2">
 </head>
 <body class="{% if user.is_authenticated %}firm-workspace{% else %}firm-guest{% endif %} {% block body_class %}{% endblock %}">
   <a href="#main" class="skip-link visually-hidden-focusable">Skip to content</a>
   <header class="firm-header">
     {% with route=request.resolver_match.url_name namespace=request.resolver_match.namespace %}
       <nav class="navbar firm-nav" aria-label="Main navigation">
-        <a class="firm-brand" href="{% url 'cases:index' %}">
+        <a class="firm-brand" href="{% url 'cases:dashboard' %}">
           <span class="firm-mark" aria-hidden="true">L</span>
           <span>LexFlow</span>
         </a>
         {% if user.is_authenticated %}
           <div class="firm-links">
-            <a href="{% url 'cases:index' %}"{% if route == 'index' %} aria-current="page"{% elif namespace == 'cases' and route|slice:":6" != 'client' %} aria-current="location"{% endif %}>Cases</a>
+            <a href="{% url 'cases:dashboard' %}"{% if namespace == 'cases' and route == 'dashboard' %} aria-current="page"{% endif %}>Dashboard</a>
+            <a href="{% url 'cases:index' %}"{% if route == 'index' %} aria-current="page"{% elif namespace == 'cases' and route|slice:":6" != 'client' and route != 'dashboard' and route != 'search' %} aria-current="location"{% endif %}>Cases</a>
+              <a href="{% url 'cases:work' %}"{% if namespace == 'cases' and route == 'work' %} aria-current="page"{% endif %}>My work</a>
+              <a href="{% url 'cases:deadlines' %}"{% if namespace == 'cases' and route == 'deadlines' %} aria-current="page"{% endif %}>Deadlines</a>
             <a href="{% url 'cases:clients' %}"{% if route == 'clients' %} aria-current="page"{% elif route|slice:":6" == 'client' %} aria-current="location"{% endif %}>Clients</a>
             {% if user.is_administrator %}
               <a href="{% url 'accounts:list' %}"{% if namespace == 'accounts' and route == 'list' %} aria-current="page"{% elif namespace == 'accounts' and route == 'create' or namespace == 'accounts' and route == 'access' %} aria-current="location"{% endif %}>Accounts</a>

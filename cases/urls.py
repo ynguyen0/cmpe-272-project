@@ -4,7 +4,9 @@ from . import views
 
 app_name = "cases"
 urlpatterns = [
-    path("", views.index, name="index"),
+    path("", views.dashboard, name="dashboard"),
+    path("cases/", views.index, name="index"),
+    path("search/", views.search, name="search"),
     path("clients/", views.client_index, name="clients"),
     path("clients/new/", views.client_create, name="client_create"),
     path("clients/<int:pk>/", views.client_detail, name="client_detail"),
@@ -38,4 +40,24 @@ urlpatterns = [
     path("cases/<int:pk>/tasks/assign/", views.task_assign, name="task_assign"),
     path("cases/<int:pk>/tasks/<int:task_pk>/reassign/", views.task_reassign, name="task_reassign"),
     path("cases/<int:pk>/tasks/<int:task_pk>/complete/", views.task_complete, name="task_complete"),
+    path("cases/<int:pk>/tasks/<int:task_pk>/edit/", views.task_edit, name="task_edit"),
+    path("cases/<int:pk>/tasks/<int:task_pk>/status/", views.task_status, name="task_status"),
+    path("work/", views.work_index, name="work"),
+    path("deadlines/", views.deadline_index, name="deadlines"),
+    path("cases/<int:pk>/deadlines/add/", views.deadline_create, name="deadline_create"),
+    path(
+        "cases/<int:pk>/deadlines/<int:deadline_pk>/edit/",
+        views.deadline_edit,
+        name="deadline_edit",
+    ),
+    path(
+        "cases/<int:pk>/deadlines/<int:deadline_pk>/resolve/",
+        views.deadline_resolve,
+        name="deadline_resolve",
+    ),
+    path(
+        "cases/<int:pk>/deadlines/<int:deadline_pk>/reopen/",
+        views.deadline_reopen,
+        name="deadline_reopen",
+    ),
 ]

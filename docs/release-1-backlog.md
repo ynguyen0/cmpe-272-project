@@ -246,7 +246,9 @@ to stable requirements and distinguish implemented-operation passes from missing
 acceptance criteria. New HTTP route-inventory tests, a combined Chromium journey,
 and a real database/document restore drill are part of the shared checks. See that
 report for the tested revision, environment, counts and open presentation blockers;
-DATE-01/02 and full release acceptance are not complete.
+After merging main, task, deadline, dashboard and audit suites and the complete
+synthetic browser journey run successfully. The report distinguishes these local
+passes from independent review, operational validation and full release approval.
 
 
 ### Authentication and account administration (2026-11-12)

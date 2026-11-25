@@ -3,12 +3,14 @@
 from datetime import UTC, datetime
 
 from django.conf import settings
+from django.contrib.auth.models import Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client as Browser
 from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
+from audit.models import AuditEvent
 from cases import urls
 from cases.forms import TaskAssignmentForm
 from cases.models import Case, CaseClient, CaseMembership
@@ -27,8 +29,13 @@ class ProtectedOperationTests(SeededTestCase):
         self.document = Document.objects.get(case=self.case, state="Active")
         self.task = Task.objects.filter(case=self.case).first()
         self.contact = Client.objects.get(email="client.alpha@example.test")
+        self.deadline = Deadline.objects.filter(case=self.case).first()
         # Every case/client endpoint has an explicit HTTP permission test below.
         self.routes = {
+            "dashboard": ([], False),
+            "search": ([], False),
+            "work": ([], False),
+            "deadlines": ([], False),
             "index": ([], False),
             "clients": ([], False),
             "client_create": ([], True),
@@ -51,6 +58,12 @@ class ProtectedOperationTests(SeededTestCase):
             "task_assign": ([self.case.pk], True),
             "task_reassign": ([self.case.pk, self.task.pk], True),
             "task_complete": ([self.case.pk, self.task.pk], True),
+            "task_edit": ([self.case.pk, self.task.pk], True),
+            "task_status": ([self.case.pk, self.task.pk], True),
+            "deadline_create": ([self.case.pk], True),
+            "deadline_edit": ([self.case.pk, self.deadline.pk], True),
+            "deadline_resolve": ([self.case.pk, self.deadline.pk], True),
+            "deadline_reopen": ([self.case.pk, self.deadline.pk], True),
         }
 
     def business_state(self):
@@ -131,6 +144,11 @@ class ProtectedOperationTests(SeededTestCase):
             "document_archive",
             "task_assign",
             "task_reassign",
+            "task_edit",
+            "deadline_create",
+            "deadline_edit",
+            "deadline_resolve",
+            "deadline_reopen",
         )
         for name in restricted:
             args, mutates = self.routes[name]
@@ -197,6 +215,50 @@ class WorkValidationTests(SeededTestCase):
                 self.assertIn("due_at", response.context["form"].errors)
         self.assertFalse(Task.objects.filter(title=self.data["title"]).exists())
 
+    def test_new_work_forms_reject_date_only_input(self):
+        task = Task.objects.filter(case=self.case).first()
+        deadline = Deadline.objects.filter(case=self.case).first()
+        for name, args, data in (
+            (
+                "task_edit",
+                [self.case.pk, task.pk],
+                {
+                    **self.data,
+                    "revision": task.revision,
+                },
+            ),
+            (
+                "deadline_create",
+                [self.case.pk],
+                {
+                    "title": "Synthetic date validation",
+                    "type": "Filing",
+                    "responsible_user": self.actor.pk,
+                },
+            ),
+            (
+                "deadline_edit",
+                [self.case.pk, deadline.pk],
+                {
+                    "title": deadline.title,
+                    "type": deadline.type,
+                    "responsible_user": self.actor.pk,
+                    "revision": deadline.revision,
+                },
+            ),
+        ):
+            data.pop("assignee", None)
+            with self.subTest(route=name):
+                response = self.client.post(
+                    reverse(f"cases:{name}", args=args),
+                    {
+                        **data,
+                        "due_at": "2026-11-25",
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("due_at", response.context["form"].errors)
+
     def test_local_and_offset_inputs_resolve_to_the_same_utc_instant(self):
         for value in ("2026-11-25T17:00", "2026-11-26T01:00:00+00:00"):
             with self.subTest(value=value), timezone.override(settings.TIME_ZONE):
@@ -206,7 +268,32 @@ class WorkValidationTests(SeededTestCase):
 
     def test_unexpected_multipart_field_is_rejected_without_business_changes(self):
         task = Task.objects.filter(case=self.case).first()
+        deadline = Deadline.objects.filter(case=self.case).first()
+        deadline_data = {
+            "title": "Synthetic multipart deadline",
+            "type": "Filing",
+            "due_at": self.data["due_at"],
+            "responsible_user": self.actor.pk,
+        }
+        task_data = {key: value for key, value in self.data.items() if key != "assignee"}
         attempts = [
+            (
+                reverse("cases:task_edit", args=[self.case.pk, task.pk]),
+                {**task_data, "revision": task.revision},
+            ),
+            (reverse("cases:deadline_create", args=[self.case.pk]), deadline_data),
+            (
+                reverse("cases:deadline_edit", args=[self.case.pk, deadline.pk]),
+                {**deadline_data, "revision": deadline.revision},
+            ),
+            (
+                reverse("cases:deadline_resolve", args=[self.case.pk, deadline.pk]),
+                {
+                    "revision": deadline.revision,
+                    "status": "Completed",
+                    "completion_notes": "Synthetic",
+                },
+            ),
             (self.url, self.data),
             (
                 reverse("cases:task_reassign", args=[self.case.pk, task.pk]),
@@ -217,7 +304,13 @@ class WorkValidationTests(SeededTestCase):
                 {"name": "Fictional forged intake", "type": "Individual"},
             ),
         ]
-        original = (Task.objects.count(), Client.objects.count(), task.revision, task.assignee_id)
+        original = (
+            Task.objects.count(),
+            Client.objects.count(),
+            task.revision,
+            task.assignee_id,
+            list(Deadline.objects.order_by("pk").values()),
+        )
         for url, data in attempts:
             with self.subTest(url=url):
                 response = self.client.post(
@@ -228,7 +321,13 @@ class WorkValidationTests(SeededTestCase):
                 self.assertContains(response, "unsupported fields", status_code=400)
         task.refresh_from_db()
         self.assertEqual(
-            (Task.objects.count(), Client.objects.count(), task.revision, task.assignee_id),
+            (
+                Task.objects.count(),
+                Client.objects.count(),
+                task.revision,
+                task.assignee_id,
+                list(Deadline.objects.order_by("pk").values()),
+            ),
             original,
         )
 
@@ -245,3 +344,68 @@ class WorkValidationTests(SeededTestCase):
         task.refresh_from_db()
         self.assertEqual(task.assignee, self.actor)
         self.assertEqual(task.revision, revision + 1)
+
+
+class ValidationAuditTests(SeededTestCase):
+    def setUp(self):
+        self.actor = User.objects.get(email="attorney.a@example.test")
+        self.case = Case.objects.get(number="DEMO-ALPHA")
+        self.client.force_login(self.actor)
+
+    def failure(self, response, resource_type, resource_id):
+        self.assertIn(response.status_code, (400, 409))
+        event = AuditEvent.objects.get(action="validation.failed")
+        self.assertEqual(event.actor, self.actor)
+        self.assertEqual(event.result, AuditEvent.Result.FAILURE)
+        self.assertEqual(event.resource_type, resource_type)
+        self.assertEqual(event.resource_id, str(resource_id))
+        self.assertEqual(event.changed_fields, [])
+        self.assertNotIn("Confidential synthetic input", str(event.__dict__))
+        return event
+
+    def test_invalid_deadline_records_a_redacted_failure(self):
+        before = Deadline.objects.count()
+        response = self.client.post(
+            reverse("cases:deadline_create", args=[self.case.pk]),
+            {
+                "title": "",
+                "type": "Filing",
+                "due_at": "not a date",
+                "responsible_user": self.actor.pk,
+                "notes": "Confidential synthetic input",
+            },
+        )
+        self.failure(response, "case", self.case.pk)
+        self.assertEqual(Deadline.objects.count(), before)
+
+    def test_stale_task_write_records_failure_and_preserves_saved_assignee(self):
+        task = Task.objects.filter(case=self.case).first()
+        revision = task.revision
+        task.update_with_revision(revision, assignee=self.actor)
+        response = self.client.post(
+            reverse("cases:task_reassign", args=[self.case.pk, task.pk]),
+            {
+                "revision": revision,
+                "assignee": task.created_by_id,
+            },
+        )
+        self.failure(response, "task", task.pk)
+        task.refresh_from_db()
+        self.assertEqual(task.assignee, self.actor)
+        self.assertEqual(task.revision, revision + 1)
+
+    def test_invalid_audit_filter_records_failure_without_filter_text(self):
+        self.actor = User.objects.get(email="admin@example.test")
+        self.actor.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="cases", codename="view_organization_audit"
+            )
+        )
+        self.client.force_login(self.actor)
+        response = self.client.get(
+            reverse("cases:audit"),
+            {
+                "resource_id": "Confidential synthetic input",
+            },
+        )
+        self.failure(response, "audit_log", "")

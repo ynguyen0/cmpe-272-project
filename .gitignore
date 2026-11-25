@@ -12,3 +12,4 @@ private-media/
 staticfiles/
 test-results/
 .DS_Store
+.vscode/

@@ -53,6 +53,8 @@ class Case(RevisionedModel):
         indexes = [
             models.Index(fields=["is_archived", "status", "opened_on"], name="case_worklist_idx"),
             models.Index(fields=["court_docket_number"], name="case_docket_idx"),
+            # Dashboard "recent activity" (DASH-01).
+            models.Index(fields=["updated_at"], name="case_recent_idx"),
         ]
         constraints = [
             *revision_checks(),

@@ -10,8 +10,11 @@ The [database design and ER diagram](docs/database-design.md) define the fields,
 protected relationships, constraints, indexes, archive rules, and migration strategy.
 
 The application provides email sign-in, password recovery, account administration,
-and membership-scoped case and client workflows. The dashboard, search results, task
-actions, and private downloads use the same case access rules. Remaining release
+and membership-scoped case and client workflows. Signing in opens the dashboard (`/`),
+which summarizes open cases, overdue and upcoming tasks and deadlines, and recent
+activity, with one search box across cases and clients; the case list is at `/cases/`.
+The dashboard, search results, task actions, and private downloads use the same case
+access rules. Remaining release
 workflows are tracked in the backlog.
 
 ## Prerequisites
@@ -135,9 +138,10 @@ uv run playwright install chromium
 sh scripts/check.sh
 ```
 
-The shared script runs Ruff format/lint checks, Django checks, migration drift checks,
-authentication/foundation/schema tests, a historical migration round trip, and
-Chromium workflows for case access, account creation, recovery, and deactivation.
+The shared script runs a `pip-audit` dependency vulnerability scan, Ruff format/lint
+checks, Django checks, migration drift checks, authentication/foundation/schema tests,
+a historical migration round trip, and Chromium workflows for case access, account
+creation, recovery, and deactivation.
 Browser tests start their own Django server and isolated test database; no development
 server or seeded development data is required. Missing browsers fail the check rather
 than silently skipping it. Development uses Django's normal password hashers; the fast
@@ -149,6 +153,7 @@ and documents together and verifies hashes and download permissions.
 Useful individual commands:
 
 ```sh
+uv run pip-audit
 uv run ruff format .
 uv run ruff check .
 uv run python manage.py test tests.test_foundation --settings=config.settings.test --noinput

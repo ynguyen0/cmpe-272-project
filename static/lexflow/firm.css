@@ -535,3 +535,23 @@ a { text-underline-offset: .18em; }
     to { opacity: 1; transform: translateY(0); }
   }
 }
+
+/* Dashboard and combined search (DASH-01): reuses the case-list styles above. */
+.case-totals.dash-totals dt a:is(:link, :visited, :hover, :active) { color: var(--eggshell); text-decoration: none; }
+.dash-totals a::after { content: ""; position: absolute; inset: 0; }
+.dash-totals div { position: relative; }
+.dash-totals div:hover, .dash-totals div:focus-within { background: color-mix(in srgb, var(--dusty-denim) 22%, transparent); }
+.dash-search-form { grid-template-columns: minmax(8rem, 1fr) auto; }
+.dash-grid {
+  display: grid;
+  gap: clamp(1rem, 2vw, 1.35rem);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr));
+  margin-top: clamp(1.35rem, 3vw, 2rem);
+}
+.dash-grid :is(.record-ref, .record-date) { white-space: nowrap; }
+.dash-kind { margin-inline-start: .35rem; color: var(--blue-slate); font-size: .78rem; font-weight: 500; }
+.dash-more { margin: 0; padding: .85rem 1.25rem; border-top: 1px solid var(--rule); color: var(--blue-slate); font-size: .85rem; }
+@media (max-width: 600px) {
+  .dash-search-form { grid-template-columns: minmax(0, 1fr); }
+  .dash-search-form .btn { margin-top: 0; }
+}

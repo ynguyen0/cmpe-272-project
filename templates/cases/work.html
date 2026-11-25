@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}My work · LexFlow{% endblock %}
+{% block content %}
+<a href="{% url 'cases:index' %}">Back to cases</a>
+<h1 class="h3 mt-3">My work</h1>
+<p class="text-secondary">Tasks you are authorized to see, soonest first.</p>
+<form method="get" class="mb-3">
+  {{ form.non_field_errors }}
+  <div class="d-flex flex-wrap align-items-end gap-3">
+    <div>{{ form.assignee.label_tag }} {{ form.assignee }} {{ form.assignee.errors }}</div>
+    <div>{{ form.status.label_tag }} {{ form.status }} {{ form.status.errors }}</div>
+    <div>{{ form.priority.label_tag }} {{ form.priority }} {{ form.priority.errors }}</div>
+    <div><label for="{{ form.window.id_for_label }}">Due</label> {{ form.window }} {{ form.window.errors }}</div>
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+  </div>
+  {{ form.page.errors }}
+</form>
+{% if page is not None %}
+  <div class="table-responsive">
+    <table class="table table-striped bg-white">
+      <caption>Tasks you are authorized to view</caption>
+      <thead><tr>
+        <th scope="col">Task</th><th scope="col">Case</th><th scope="col">Assignee</th>
+        <th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Due</th>
+      </tr></thead>
+      <tbody>
+      {% for task in page %}
+        <tr>
+          <td>{{ task.title }}</td>
+          <td><a href="{% url 'cases:detail' task.case_id %}">{{ task.case.number }}</a></td>
+          <td>{{ task.assignee.full_name }}</td>
+          <td>{{ task.priority }}</td>
+          <td>{{ task.status }}</td>
+          <td>
+            {{ task.due_at|date:"Y-m-d H:i" }}
+            {% if task.status != 'Done' and task.due_at < now %}
+              <span class="badge text-bg-danger">Overdue</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}<tr><td colspan="6">No matching tasks.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.has_other_pages %}
+    <nav aria-label="Work result pages" class="d-flex gap-3">
+      {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}">Previous</a>{% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+{% endif %}
+{% endblock %}
