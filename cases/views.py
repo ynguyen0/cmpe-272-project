@@ -300,7 +300,10 @@ def client_create(request):
     user = lock_actor(request)
     if not has_capability(user, Action.CREATE_RECORDS):
         raise PermissionDenied
-    form = ClientForm(request.POST if request.method == "POST" else None)
+    form = ClientForm(
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+    )
     if form.is_valid():
         matches = duplicate_warning(user, form)
         if matches:
@@ -330,6 +333,7 @@ def client_edit(request, pk):
     context = {"client_record": client}
     form = ClientEditForm(
         request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
         instance=client,
         initial={"revision": client.revision},
     )
@@ -365,7 +369,9 @@ def client_archive(request, pk):
     if client.status == Client.Status.ARCHIVED:
         return HttpResponse("This client is already archived.", status=409)
     form = RevisionForm(
-        request.POST if request.method == "POST" else None, initial={"revision": client.revision}
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+        initial={"revision": client.revision},
     )
     title = "Archive client"
     context = {
@@ -395,7 +401,10 @@ def case_link_client(request, pk):
         raise PermissionDenied
     require_editable(case)
     form = CaseClientForm(
-        request.POST if request.method == "POST" else None, actor=request.user, case=case
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+        actor=request.user,
+        case=case,
     )
     if form.is_valid():
         try:
@@ -415,7 +424,11 @@ def case_create(request):
     user = lock_actor(request)
     if not has_capability(user, Action.CREATE_RECORDS):
         raise PermissionDenied
-    form = CaseCreationForm(request.POST if request.method == "POST" else None, actor=user)
+    form = CaseCreationForm(
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+        actor=user,
+    )
     if form.is_valid():
         try:
             case = create_case(form, user)
@@ -443,6 +456,7 @@ def case_edit(request, pk):
     revision = case.revision
     form = CaseEditForm(
         request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
         instance=case,
         editable_fields=editable_case_fields(request.user, case),
     )
@@ -472,7 +486,11 @@ def case_team(request, pk):
     if not can_manage_case(request.user, case):
         raise PermissionDenied
     title = "Save case team"
-    form = CaseTeamForm(request.POST if request.method == "POST" else None, case=case)
+    form = CaseTeamForm(
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+        case=case,
+    )
     valid = form.is_valid()
     if request.method == "POST" and stale_case_form(form, case.revision):
         return form_response(request, form, title, status=409, case_record=case)
@@ -511,6 +529,7 @@ def case_status(request, pk):
     context = {"case_record": case}
     form = CaseStatusForm(
         request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
         case=case,
         targets=CASE_TRANSITIONS[case.status],
         replacements=reopening_attorney_choices(case, request.user),
@@ -557,7 +576,9 @@ def case_archive(request, pk):
     if case.status != Case.Status.CLOSED or case.is_archived:
         return HttpResponse("Only closed, unarchived cases can be archived.", status=409)
     form = RevisionForm(
-        request.POST if request.method == "POST" else None, initial={"revision": case.revision}
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+        initial={"revision": case.revision},
     )
     return revision_response(
         request,
@@ -762,7 +783,11 @@ def lock_assignee_membership(case, assignee):
 def task_assign(request, pk):
     case = case_for_action(request, pk, Action.ASSIGN_TASKS)
     require_editable(case)
-    form = TaskAssignmentForm(request.POST if request.method == "POST" else None, case=case)
+    form = TaskAssignmentForm(
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+        case=case,
+    )
     if form.is_valid():
         task = form.save(commit=False)
         lock_assignee_membership(case, task.assignee)
@@ -787,6 +812,7 @@ def task_reassign(request, pk, task_pk):
         raise PermissionDenied
     form = TaskReassignmentForm(
         request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
         case=case,
         initial={"revision": task.revision, "assignee": task.assignee_id},
     )
@@ -809,7 +835,9 @@ def task_complete(request, pk, task_pk):
     if task.status == Task.Status.DONE:
         return HttpResponse("This task is already complete.", status=409)
     form = RevisionForm(
-        request.POST if request.method == "POST" else None, initial={"revision": task.revision}
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+        initial={"revision": task.revision},
     )
     return revision_response(
         request,

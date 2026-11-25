@@ -24,6 +24,17 @@ because team GitHub handles/ownership have not been confirmed.
 - Update the requirements traceability and development record with affected IDs, actual
   code/test paths, command/results, design changes, and remaining gaps.
 
+## Dedicated integration period
+
+After feature-level checks pass, reserve a separate integration pass before each
+presentation or release. Run the full shared suite, the complete browser journey,
+a paired database/document restore, and interactive exploration as each role using
+isolated synthetic records and files. Record requirement links, commands/revision,
+results and known gaps in [test results](docs/test-results.md). Track each defect's
+reproduction, severity, owner, fix and retest result there. Access-control failures,
+data loss, broken core journeys and other required acceptance failures block
+presentation sign-off. Never count an unavailable feature or unrun test as passed.
+
 ## Definition of done
 
 A change is done when its acceptance criteria pass, checks pass without unexplained

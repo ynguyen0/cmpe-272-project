@@ -239,6 +239,16 @@ As a reviewer, I can follow a repeatable demonstration and inspect the delivered
 
 ## Requirements traceability
 
+### Functional, security and integration evidence (2026-11-25)
+
+The [test results and defect register](test-results.md) map all current test areas
+to stable requirements and distinguish implemented-operation passes from missing
+acceptance criteria. New HTTP route-inventory tests, a combined Chromium journey,
+and a real database/document restore drill are part of the shared checks. See that
+report for the tested revision, environment, counts and open presentation blockers;
+DATE-01/02 and full release acceptance are not complete.
+
+
 ### Authentication and account administration (2026-11-12)
 
 | Requirement | Implementation | Local evidence |

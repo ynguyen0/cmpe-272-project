@@ -82,3 +82,26 @@ This schema step is implemented locally; complete release feature stories remain
 ## Submission record
 
 TBA. Fill in the confirmed instructor deadline, team leader, release commit/tag, final report, presentation, demonstration video/file, source repository, test report, known limitations, and submission confirmation when available. Do not mark submission complete without evidence.
+
+
+## Functional, integration, security and usability testing — 2026-11-25
+
+Owner: Codex; independent team review and open-feature owners remain pending.
+Requirements: ACCESS-01, AUTH-01/02, USER-01/02, CLIENT-01/03, CASE-01/04,
+DOC-01/02/03, TASK-01/02/03, DATE-01/02, DASH-01, LOG-01/02, DEL-01/02.
+
+Added a protected HTTP route inventory and denial/no-business-change checks,
+fixed-date and DST validation regressions, a two-session stale-editor scenario,
+a combined browser intake/case/file/task/revocation/closure journey, and a real
+PostgreSQL plus private-document recovery drill. The shared check includes the
+new modules. Regressions reproduced and fixed date-only task acceptance and
+ignored unexpected multipart fields. Interactive exploration as all three roles
+also led to useful generic 403/404 pages with navigation back to the workspace.
+
+[Results, reproduction steps, severity, ownership, retests and limitations](test-results.md)
+are the current evidence for this step. The development database and existing
+private files were not used as test fixtures. No schema or dependency changes.
+Deadline creation/resolution, complete task transitions, date summaries and full
+audit acceptance remain open; presentation sign-off is blocked. This is local
+working-tree evidence, not a commit, hosted CI run, human review or completed
+release demonstration.

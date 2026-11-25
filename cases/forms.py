@@ -1,4 +1,7 @@
+import re
+
 from django import forms
+from django.conf import settings
 from django.utils import timezone
 
 from accounts.models import User
@@ -296,7 +299,19 @@ class DocumentEditForm(StrictFields, forms.ModelForm):
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
 
+class RequiredDateTimeField(forms.DateTimeField):
+    def to_python(self, value):
+        if isinstance(value, str) and value.strip() and not re.search(r"[T ]\d{2}:\d{2}", value):
+            raise forms.ValidationError("Enter both a date and time.")
+        return super().to_python(value)
+
+
 class TaskAssignmentForm(StrictFields, forms.ModelForm):
+    due_at = RequiredDateTimeField(
+        widget=forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local"}),
+        help_text=f"Enter a date and time in the firm's {settings.TIME_ZONE} timezone.",
+    )
+
     class Meta:
         model = Task
         fields = ("title", "description", "assignee", "priority", "due_at")

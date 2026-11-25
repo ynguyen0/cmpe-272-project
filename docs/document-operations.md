@@ -55,3 +55,15 @@ using the appropriate PostgreSQL connection variables. Extract the matching, tru
 Configure the isolated recovery app to use those two restored locations. Check document
 downloads for both active and archived records with an authorized member and confirm
 a copied link fails for a different user before reopening service.
+
+
+### Automated restore drill
+
+The shared check runs [RecoveryTests](../tests/test_recovery.py) with compatible
+`pg_dump` and `pg_restore` on PATH. It backs up isolated synthetic records and
+private files, restores them into a uniquely named temporary PostgreSQL database
+and empty media directory, compares SHA-256 hashes, verifies linked relationships,
+and checks authorized/unauthorized active and archived downloads. The recovery
+database is dropped in `finally`; the development database and files are not
+restored over. See [test results](test-results.md) for the latest evidence and
+production recovery limitations.
