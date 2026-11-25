@@ -181,8 +181,16 @@ class CaseManagementTests(SeededTestCase):
                 "case.close",
                 "case.reopen",
                 "case.archive",
+                # Staff's status change, editing the closed case and reopening the
+                # archived one were all refused.
+                "access.denied",
             },
         )
+        denials = AuditEvent.objects.filter(
+            resource_type="case", resource_id=str(case.pk), action="access.denied"
+        )
+        self.assertEqual(denials.count(), 3)
+        self.assertEqual(set(denials.values_list("result", flat=True)), {"denied"})
 
     def test_assigned_administrator_can_replace_ineligible_lead_when_reopening(self):
         case = self.alpha

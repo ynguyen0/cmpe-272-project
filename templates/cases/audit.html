@@ -1,20 +1,52 @@
 {% extends 'base.html' %}
+{% load tz %}
 {% block title %}Audit records · LexFlow{% endblock %}
 {% block content %}
 <a href="{% url 'cases:index' %}">Back to cases</a>
 <h1 class="h3 mt-3">Audit records</h1>
-<div class="table-responsive">
-  <table class="table table-striped bg-white">
-    <thead><tr><th scope="col">Time</th><th scope="col">Actor</th><th scope="col">Action</th><th scope="col">Result</th><th scope="col">Record</th></tr></thead>
-    <tbody>
-    {% for event in page %}
-      <tr><td>{{ event.occurred_at }}</td><td>{{ event.actor.full_name|default:'—' }}</td><td>{{ event.action }}</td><td>{{ event.result }}</td><td>{{ event.resource_type }} {{ event.resource_id }}</td></tr>
-    {% empty %}
-      <tr><td colspan="5">No audit events recorded.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
+<p class="text-muted">Newest first. Times and dates are UTC; the default range is the last 7 days, and a range can cover at most 31 days.</p>
+<div class="register-sheet">
+  <form method="get" class="record-filters">
+    {{ form.non_field_errors }}
+    <div>{{ form.actor.label_tag }} {{ form.actor }} {{ form.actor.errors }}</div>
+    <div>{{ form.action.label_tag }} {{ form.action }} {{ form.action.errors }}</div>
+    <div>{{ form.resource_type.label_tag }} {{ form.resource_type }} {{ form.resource_type.errors }}</div>
+    <div>{{ form.resource_id.label_tag }} {{ form.resource_id }} {{ form.resource_id.errors }}</div>
+    <div>{{ form.start.label_tag }} {{ form.start }} {{ form.start.errors }}</div>
+    <div>{{ form.end.label_tag }} {{ form.end }} {{ form.end.errors }}</div>
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    <a href="{% url 'cases:audit' %}">Clear filters</a>
+    {{ form.page.errors }}
+  </form>
+  {% if page is not None %}
+    <div class="table-responsive">
+      <table class="table table-striped bg-white">
+        <caption class="visually-hidden">Audit events</caption>
+        <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Actor</th><th scope="col">Action</th><th scope="col">Result</th><th scope="col">Record</th><th scope="col">Changed fields</th><th scope="col">Request</th></tr></thead>
+        <tbody>
+        {% for event in page %}
+          <tr>
+            <td>{{ event.occurred_at|utc|date:"Y-m-d H:i:s" }}</td>
+            <td>{% if event.actor %}{{ event.actor.full_name }} <span class="text-muted">#{{ event.actor_id }}</span>{% else %}<span class="text-muted">Not signed in</span>{% endif %}</td>
+            <td>{{ event.action }}</td>
+            <td>{{ event.result }}</td>
+            <td>{{ event.resource_type }}{% if event.resource_id %} #{{ event.resource_id }}{% endif %}</td>
+            <td>{{ event.changed_fields|join:", "|default:"—" }}</td>
+            <td><code title="{{ event.correlation_id }}">{{ event.correlation_id|stringformat:"s"|slice:":8" }}</code></td>
+          </tr>
+        {% empty %}
+          <tr><td class="record-empty" colspan="7">No audit events match these filters.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page.has_other_pages %}
+      <nav aria-label="Audit results pages" class="record-pagination">
+        {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}">Previous</a>{% endif %}
+        <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% endif %}
 </div>
-{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Previous page</a>{% endif %}
-{% if page.has_next %}<a href="?page={{ page.next_page_number }}">Next page</a>{% endif %}
 {% endblock %}

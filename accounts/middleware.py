@@ -4,6 +4,7 @@ from django.utils.cache import patch_cache_control
 from django.utils.timezone import now
 
 from audit.models import AuditEvent
+from audit.services import Action, Resource, record_event
 
 from .security import audit_account
 
@@ -29,6 +30,14 @@ class AccountSessionMiddleware:
             last_seen = request.session.get(SESSION_LAST_SEEN_AT, timestamp)
             if not user.is_authenticated:
                 # An inactive or revoked account cannot keep its old session.
+                # Record which account lost it; the session itself is never logged.
+                revoked_pk = str(request.session.get(SESSION_KEY, ""))
+                record_event(
+                    action=Action.SESSION_REVOKED,
+                    resource_type=Resource.USER,
+                    resource_id=revoked_pk if revoked_pk.isdigit() else "",
+                    result=AuditEvent.Result.SUCCESS,
+                )
                 request.session.flush()
             elif (
                 timestamp - started >= settings.SESSION_ABSOLUTE_AGE

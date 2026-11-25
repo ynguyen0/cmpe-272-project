@@ -1,7 +1,12 @@
+from datetime import UTC, datetime, time, timedelta
+
 from django import forms
+from django.core.validators import RegexValidator
 from django.utils import timezone
 
 from accounts.models import User
+from audit.models import AuditEvent
+from audit.services import RESOURCE_ID_PATTERN
 from clients.models import Client
 from clients.search import PHONE_INPUT, phone_digits
 from documents.models import Document
@@ -439,6 +444,77 @@ class DeadlineFilterForm(StrictFields, forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["responsible_user"].queryset = choices
         self.fields["responsible_user"].empty_label = "Anyone I can see"
+
+
+AUDIT_DEFAULT_DAYS = 7
+AUDIT_MAX_DAYS = 31
+
+
+class AuditActorChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, user):
+        return f"{user.full_name} ({user.email})"
+
+
+class AuditFilterForm(StrictFields, forms.Form):
+    """LOG-02 filters: actor, action, resource, and an inclusive UTC date range."""
+
+    actor = AuditActorChoiceField(
+        required=False, queryset=User.objects.order_by("email"), empty_label="Any actor"
+    )
+    action = forms.ChoiceField(required=False)
+    resource_type = forms.ChoiceField(required=False, label="Record type")
+    resource_id = forms.CharField(
+        required=False,
+        max_length=80,
+        label="Record ID",
+        validators=[
+            RegexValidator(RESOURCE_ID_PATTERN, "Enter a record ID such as 12, without spaces.")
+        ],
+    )
+    start = forms.DateField(
+        required=False, label="From (UTC)", widget=forms.DateInput(attrs={"type": "date"})
+    )
+    end = forms.DateField(
+        required=False, label="To (UTC)", widget=forms.DateInput(attrs={"type": "date"})
+    )
+    page = forms.IntegerField(required=False, min_value=1)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        events = AuditEvent.objects.order_by()
+        actions = events.values_list("action", flat=True).distinct().order_by("action")
+        types = events.values_list("resource_type", flat=True).distinct().order_by("resource_type")
+        self.fields["action"].choices = [("", "Any action"), *((a, a) for a in actions)]
+        self.fields["resource_type"].choices = [("", "Any record"), *((t, t) for t in types)]
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.errors:
+            return cleaned
+        today = timezone.now().astimezone(UTC).date()
+        start, end = cleaned.get("start"), cleaned.get("end")
+        if end is None:
+            end = today
+        if start is None:
+            start = end - timedelta(days=AUDIT_DEFAULT_DAYS - 1)
+        if start > end:
+            raise forms.ValidationError("The start date must be on or before the end date.")
+        if (end - start).days >= AUDIT_MAX_DAYS:
+            raise forms.ValidationError(f"Choose a date range of at most {AUDIT_MAX_DAYS} days.")
+        cleaned["start"], cleaned["end"] = start, end
+        return cleaned
+
+    def filter(self, events):
+        data = self.cleaned_data
+        lower = datetime.combine(data["start"], time.min, tzinfo=UTC)
+        upper = datetime.combine(data["end"] + timedelta(days=1), time.min, tzinfo=UTC)
+        events = events.filter(occurred_at__gte=lower, occurred_at__lt=upper)
+        if data["actor"] is not None:
+            events = events.filter(actor=data["actor"])
+        for field in ("action", "resource_type", "resource_id"):
+            if data[field]:
+                events = events.filter(**{field: data[field]})
+        return events.order_by("-occurred_at", "-pk")
 
 
 class GlobalSearchForm(StrictFields, forms.Form):

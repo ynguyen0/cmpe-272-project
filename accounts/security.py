@@ -1,24 +1,29 @@
-from uuid import uuid4
-
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.utils.crypto import salted_hmac
 
 from audit.models import AuditEvent
+from audit.services import Resource, record_event
 
 
 def audit_account(request, action, result, *, actor=None, target=None, fields=()):
-    if not hasattr(request, "audit_correlation_id"):
-        request.audit_correlation_id = uuid4()
-    AuditEvent.objects.create(
+    """Record an authentication or account-administration event (LOG-01).
+
+    Delegates to :func:`audit.services.record_event`, so account events get the
+    same allowlist, pattern checks and per-request correlation ID as every other
+    event. A ``DENIED`` result marks the request so the access-denial middleware
+    does not record the same refusal a second time.
+    """
+    if result == AuditEvent.Result.DENIED:
+        request.audit_denial_recorded = True
+    return record_event(
         actor=actor,
         action=action,
-        resource_type="user",
+        resource_type=Resource.USER,
         resource_id=str(target.pk) if target is not None else "",
         result=result,
-        correlation_id=request.audit_correlation_id,
-        changed_fields=list(fields),
+        changed_fields=fields,
     )
 
 

@@ -12,6 +12,8 @@ from django.views.decorators.http import require_http_methods, require_safe
 
 from accounts.models import User
 from audit.models import AuditEvent
+from audit.services import Action as AuditAction
+from audit.services import Resource
 from clients.models import Client
 from clients.search import possible_duplicates, search_clients
 from config.models import ConcurrentEditError
@@ -24,6 +26,7 @@ from work.transitions import DEADLINE_TRANSITIONS, TASK_TRANSITIONS, allows
 
 from .dashboard import recent_activity, search_everything, work_cards
 from .forms import (
+    AuditFilterForm,
     CaseClientForm,
     CaseCreationForm,
     CaseEditForm,
@@ -309,10 +312,34 @@ def client_detail(request, pk):
 @login_required
 @require_safe
 def audit_index(request):
+    """LOG-02: filtered, paginated, newest-first review of audit events.
+
+    Invalid filters, reversed or over-long date ranges and out-of-range pages are
+    rejected with 400 and no results. The review itself is recorded as one
+    ``audit_log.read`` event *after* the query has run, so it never appears in
+    the page it describes and never triggers further logging.
+    """
     if not has_capability(request.user, Action.VIEW_AUDIT):
         raise PermissionDenied
-    page = Paginator(audit_events_visible_to(request.user).select_related("actor"), 50)
-    return render(request, "cases/audit.html", {"page": page.get_page(request.GET.get("page"))})
+    form = AuditFilterForm(request.GET)
+    page = None
+    if form.is_valid():
+        events = form.filter(audit_events_visible_to(request.user)).select_related("actor")
+        paginator = Paginator(events, 50)
+        number = form.cleaned_data["page"] or 1
+        if number > paginator.num_pages:
+            form.add_error("page", "This page does not exist.")
+        else:
+            page = paginator.page(number)
+            page.object_list = list(page.object_list)
+    if page is not None and request.method == "GET":
+        audit_event(request, AuditAction.AUDIT_LOG_READ, Resource.AUDIT_LOG)
+    return render(
+        request,
+        "cases/audit.html",
+        {"form": form, "page": page},
+        status=200 if page is not None else 400,
+    )
 
 
 def form_response(request, form, title, *, status=None, **context):

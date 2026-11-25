@@ -63,10 +63,69 @@ A genuinely new changed-field name must be added to `AuditEvent.CHANGE_FIELDS`
 **and** to the database check constraint in a migration. The constraint is the
 real enforcement; the Python check exists to give a readable error first.
 
-## Known gap
+## Account events
 
-`accounts.security.audit_account` writes `AuditEvent` rows directly and sets its
-own `request.audit_correlation_id`, so account events do not share the
-middleware's `request.correlation_id`, and they skip the allowlist, pattern and
-transaction checks above. Pointing that helper at `record_event()` would unify
-both. Raised for team review rather than changed unilaterally.
+`accounts.security.audit_account` is a thin wrapper over `record_event()` with
+`resource_type="user"`, so authentication and account-administration events get
+the same allowlist, pattern checks and per-request correlation ID as every other
+event. Recorded: sign-in success, failure and throttling; sign-out; idle or
+absolute session expiry; revocation of a deactivated account's session
+(`auth.session_revoked`); password change, reset request and reset; account
+creation, role change, deactivation and reactivation. A reset request has no
+target, because naming the matching account would reveal whether an email is
+registered.
+
+## Access denials
+
+`audit.middleware.AccessDenialAuditMiddleware` records refused requests as
+`access.denied` with result `denied`, the actor (or none), and the record the
+URL asked for. It works in `process_exception`, which Django calls after the
+view's `transaction.atomic()` block has rolled back, so the denial is written
+in its own transaction and survives the rollback of whatever the request tried
+to change.
+
+* `PermissionDenied` is always recorded.
+* `Http404` is recorded only when the requested record exists. Scoped lookups
+  return 404 for records outside the caller's assignments, so the caller cannot
+  tell "hidden" from "missing"; the event is visible only to auditors.
+* A view that records its own, more specific denial (the account screens do,
+  through `audit_account(..., DENIED)`) is not recorded a second time.
+
+Feature code therefore just raises `PermissionDenied` or 404s as usual; it does
+not need to log denials itself.
+
+## When an audit write fails
+
+The rule is **no unaudited change, and no denial turned into access**:
+
+| Event kind | If the audit write fails |
+| --- | --- |
+| Mutation (create, edit, status, assignment, archive, upload) | The event is in the same transaction, so the exception rolls the change back and the request fails with a server error. The change is not saved. |
+| Read, search, list or download | The event is written before the response is built, so the request fails and the data is not served. |
+| Authentication and account events | The request fails with a server error; account changes roll back with their event. |
+| Access denial | The request is still refused exactly as before. The failure is reported to the `lexflow.audit` logger with only the exception type, never the request data. |
+
+Operators should alert on `lexflow.audit` errors and on server errors in general.
+
+## Reviewing the log (LOG-02)
+
+Administrators with the `view_organization_audit` grant open **Audit records**
+(`/audit/`). Events are newest first (time, then ID), 50 per page, and can be
+filtered by actor, action, record type, record ID and an inclusive UTC date
+range. The default range is the last 7 days and a range may cover at most 31
+days. Reversed or over-long ranges, malformed dates or IDs, unknown actions or
+actors, unexpected parameters and out-of-range pages are rejected with 400 and
+no results. Each successful review records one `audit_log.read` event after the
+query runs, so it never appears in the page it describes and never causes
+further logging. Refused reviews are recorded as `access.denied`.
+
+## Limits of tamper resistance
+
+Application users, including administrators, cannot change or delete audit
+events: there is no edit or delete screen, and a PostgreSQL trigger rejects
+`UPDATE` and `DELETE` on `audit_auditevent`. This is **not** protection against
+someone with database administrator rights, who can disable the trigger, edit
+rows or drop the table. Stronger tamper resistance (shipping events to a
+separate write-once store, hash-chaining rows, or restricting the application's
+database role) is a later operational enhancement and is out of scope for
+release 1.
