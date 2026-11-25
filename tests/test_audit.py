@@ -319,3 +319,242 @@ class SharedCorrelationIdTests(TestCase):
         self.client.get(reverse("cases:detail", args=[case.pk]))
         produced = AuditEvent.objects.filter(pk__gt=mark)
         self.assertEqual(produced.values("correlation_id").distinct().count(), 2)
+
+
+# --- Issue #18 coverage: denials, account events, review page, failure policy ---
+
+from datetime import UTC, datetime, timedelta  # noqa: E402
+
+from django.contrib.auth.models import Permission  # noqa: E402
+from django.db.models import F  # noqa: E402
+from django.utils import timezone  # noqa: E402
+
+from cases.policies import Action as Capability  # noqa: E402
+from work.models import Task  # noqa: E402
+
+from .test_foundation import DEMO_PASSWORD, SeededTestCase  # noqa: E402
+
+
+class SeededAuditTestCase(SeededTestCase):
+    def setUp(self):
+        self.admin = User.objects.get(email="admin@example.test")
+        self.attorney = User.objects.get(email="attorney.a@example.test")
+        self.other_attorney = User.objects.get(email="attorney.b@example.test")
+        self.staff = User.objects.get(email="staff.a@example.test")
+        self.alpha = Case.objects.get(number="DEMO-ALPHA")
+        self.task = Task.objects.filter(case=self.alpha, assignee=self.staff).first()
+
+    def grant_audit(self, user):
+        user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="cases", codename=Capability.VIEW_AUDIT)
+        )
+
+    def denials(self, **filters):
+        return AuditEvent.objects.filter(action=Action.ACCESS_DENIED, **filters)
+
+
+class AccessDenialTests(SeededAuditTestCase):
+    def test_refused_mutation_is_recorded_after_its_transaction_rolls_back(self):
+        url = reverse("cases:task_complete", args=[self.alpha.pk, self.task.pk])
+        self.client.force_login(self.attorney)  # a member, but not the assignee
+        response = self.client.post(url, {"revision": self.task.revision})
+        self.assertEqual(response.status_code, 403)
+        self.task.refresh_from_db()
+        self.assertNotEqual(self.task.status, Task.Status.DONE)
+        event = self.denials().get()
+        self.assertEqual(event.actor, self.attorney)
+        self.assertEqual(event.result, AuditEvent.Result.DENIED)
+        self.assertEqual((event.resource_type, event.resource_id), ("task", str(self.task.pk)))
+        self.assertEqual(event.changed_fields, [])
+
+    def test_hidden_record_is_a_denial_but_a_missing_one_is_not(self):
+        self.client.force_login(self.other_attorney)  # not on the Alpha team
+        detail = reverse("cases:detail", args=[self.alpha.pk])
+        self.assertEqual(self.client.get(detail).status_code, 404)
+        self.assertEqual(
+            self.denials(resource_type="case", resource_id=str(self.alpha.pk)).count(), 1
+        )
+        missing = Case.objects.aggregate(top=Max("pk"))["top"] + 1000
+        self.assertEqual(self.client.get(reverse("cases:detail", args=[missing])).status_code, 404)
+        self.assertFalse(self.denials(resource_id=str(missing)).exists())
+
+    def test_audit_page_refusal_is_recorded(self):
+        self.client.force_login(self.attorney)
+        self.assertEqual(self.client.get(reverse("cases:audit")).status_code, 403)
+        self.assertEqual(self.denials(resource_type="audit_log", actor=self.attorney).count(), 1)
+
+    def test_account_refusal_is_recorded_once(self):
+        self.client.force_login(self.attorney)
+        self.assertEqual(self.client.get(reverse("accounts:list")).status_code, 403)
+        refusals = AuditEvent.objects.filter(actor=self.attorney, result="denied")
+        self.assertEqual(list(refusals.values_list("action", flat=True)), ["account.admin"])
+
+    def test_a_failed_denial_write_still_refuses_the_request(self):
+        self.client.force_login(self.attorney)
+        with (
+            patch("audit.middleware.record_event", side_effect=RuntimeError("db down")),
+            self.assertLogs("lexflow.audit", "ERROR") as logs,
+        ):
+            self.assertEqual(self.client.get(reverse("cases:audit")).status_code, 403)
+        self.assertIn("RuntimeError", logs.output[0])
+        self.assertNotIn("db down", logs.output[0])
+
+
+class AccountEventTests(SeededAuditTestCase):
+    def test_account_events_use_the_shared_writer_and_request_id(self):
+        response = self.client.post(
+            reverse("accounts:login"),
+            {"username": "attorney.a@example.test", "password": "wrong-" + DEMO_PASSWORD},
+        )
+        self.assertEqual(response.status_code, 200)
+        failure = AuditEvent.objects.get(action="auth.login", result="failure")
+        self.assertIsNone(failure.actor)
+        self.assertEqual(failure.resource_id, "")
+        self.client.post(
+            reverse("accounts:login"),
+            {"username": "attorney.a@example.test", "password": DEMO_PASSWORD},
+        )
+        success = AuditEvent.objects.get(action="auth.login", result="success")
+        self.assertEqual(success.actor, self.attorney)
+        self.assertNotEqual(success.correlation_id, failure.correlation_id)
+        # Routed through record_event, so a non-allowlisted name is refused.
+        from accounts.security import audit_account
+
+        request = RequestFactory().get("/")
+        with self.assertRaises(ValueError):
+            audit_account(request, "auth.login", "success", fields=["password"])
+
+    def test_revoked_session_is_recorded_without_session_data(self):
+        self.client.force_login(self.staff)
+        User.objects.filter(pk=self.staff.pk).update(
+            is_active=False, session_version=F("session_version") + 1
+        )
+        self.client.get(reverse("cases:index"))
+        event = AuditEvent.objects.get(action=Action.SESSION_REVOKED)
+        self.assertIsNone(event.actor)
+        self.assertEqual((event.resource_type, event.resource_id), ("user", str(self.staff.pk)))
+
+    def test_password_reset_request_does_not_name_the_account(self):
+        self.client.post(reverse("accounts:password_reset"), {"email": "staff.a@example.test"})
+        event = AuditEvent.objects.get(action="auth.password_reset_request")
+        self.assertIsNone(event.actor)
+        self.assertEqual(event.resource_id, "")
+
+
+class AuditWriteFailureTests(SeededAuditTestCase):
+    def test_a_failed_mutation_event_rolls_the_change_back(self):
+        url = reverse("cases:task_complete", args=[self.alpha.pk, self.task.pk])
+        self.client.force_login(self.staff)
+        with (
+            patch("cases.services.record_event", side_effect=RuntimeError("audit down")),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.post(url, {"revision": self.task.revision})
+        self.task.refresh_from_db()
+        self.assertNotEqual(self.task.status, Task.Status.DONE)
+
+
+class AuditReviewTests(SeededAuditTestCase):
+    def setUp(self):
+        super().setUp()
+        self.grant_audit(self.admin)
+        self.client.force_login(self.admin)
+        self.url = reverse("cases:audit")
+
+    def event_at(self, when, **fields):
+        defaults = {
+            "action": Action.CASE_READ,
+            "resource_type": Resource.CASE,
+            "resource_id": str(self.alpha.pk),
+            "result": AuditEvent.Result.SUCCESS,
+            "actor": self.attorney,
+        }
+        with patch("django.utils.timezone.now", return_value=when):
+            return record_event(**{**defaults, **fields})
+
+    def shown(self, response):
+        return list(response.context["page"].object_list)
+
+    def test_default_range_is_the_last_seven_utc_days_newest_first(self):
+        now = timezone.now()
+        old = self.event_at(now - timedelta(days=10))
+        recent = self.event_at(now - timedelta(days=2))
+        newest = self.event_at(now - timedelta(minutes=1))
+        shown = self.shown(self.client.get(self.url))
+        self.assertNotIn(old, shown)
+        self.assertLess(shown.index(newest), shown.index(recent))
+
+    def test_filters_by_actor_action_record_and_date(self):
+        day = datetime(2026, 11, 2, 12, tzinfo=UTC)
+        match = self.event_at(day)
+        self.event_at(day, actor=self.staff)
+        self.event_at(day, action=Action.CASE_UPDATED)
+        self.event_at(day, resource_id="999")
+        self.event_at(day - timedelta(days=3))
+        response = self.client.get(
+            self.url,
+            {
+                "actor": self.attorney.pk,
+                "action": Action.CASE_READ,
+                "resource_type": "case",
+                "resource_id": str(self.alpha.pk),
+                "start": "2026-11-01",
+                "end": "2026-11-02",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.shown(response), [match])
+
+    def test_rejects_invalid_filters_ranges_and_pages(self):
+        cases = [
+            {"start": "2026-11-10", "end": "2026-11-01"},  # reversed
+            {"start": "2026-10-01", "end": "2026-11-01"},  # 32 days
+            {"start": "not-a-date"},
+            {"action": "case.made_up"},
+            {"resource_id": "12; DROP"},
+            {"actor": "999999"},
+            {"page": "0"},
+            {"page": "abc"},
+            {"page": "999"},
+            {"unexpected": "1"},
+        ]
+        for params in cases:
+            with self.subTest(params=params):
+                response = self.client.get(self.url, params)
+                self.assertEqual(response.status_code, 400)
+                self.assertIsNone(response.context["page"])
+        ok = self.client.get(self.url, {"start": "2026-10-02", "end": "2026-11-01"})
+        self.assertEqual(ok.status_code, 200)  # exactly 31 days
+
+    def test_no_matches_shows_an_empty_state(self):
+        response = self.client.get(self.url, {"start": "2026-01-01", "end": "2026-01-02"})
+        self.assertContains(response, "No audit events match these filters.")
+
+    def test_paginates_fifty_per_page(self):
+        day = datetime(2026, 11, 3, 12, tzinfo=UTC)
+        for offset in range(51):
+            self.event_at(day + timedelta(seconds=offset))
+        params = {"start": "2026-11-03", "end": "2026-11-03"}
+        self.assertEqual(len(self.shown(self.client.get(self.url, params))), 50)
+        self.assertEqual(len(self.shown(self.client.get(self.url, {**params, "page": 2}))), 1)
+
+    def test_review_is_recorded_after_the_query_without_recursion(self):
+        response = self.client.get(self.url)
+        self.assertNotIn(Action.AUDIT_LOG_READ, [e.action for e in self.shown(response)])
+        self.assertEqual(AuditEvent.objects.filter(action=Action.AUDIT_LOG_READ).count(), 1)
+        self.client.get(self.url, {"page": "abc"})  # rejected queries are not reviews
+        self.assertEqual(AuditEvent.objects.filter(action=Action.AUDIT_LOG_READ).count(), 1)
+
+    def test_log_contains_no_search_text_or_passwords(self):
+        attempt = "Fictional-wrong-passphrase-99!"
+        anonymous = self.client_class()
+        anonymous.post(
+            reverse("accounts:login"),
+            {"username": "staff.a@example.test", "password": attempt},
+        )
+        self.client.get(reverse("cases:clients"), {"q": "Confidential search phrase"})
+        self.client.get(reverse("cases:index"), {"q": "Confidential case phrase"})
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        for secret in (attempt, "Confidential search phrase", "Confidential case phrase"):
+            self.assertNotContains(response, secret)

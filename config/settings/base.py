@@ -46,6 +46,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "accounts.middleware.PrivateResponseMiddleware",
+    # Last, so its process_exception runs first: right after the view's
+    # transaction rolled back, with the authenticated user available.
+    "audit.middleware.AccessDenialAuditMiddleware",
 ]
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [

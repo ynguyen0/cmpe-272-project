@@ -113,6 +113,13 @@ class RequestPasswordResetView(PasswordResetView):
     success_url = reverse_lazy("accounts:password_reset_done")
     extra_context = {"submit_label": "Send reset link"}
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # No target: recording which account matched would reveal whether an
+        # email is registered, and the address itself is never logged.
+        audit_account(self.request, "auth.password_reset_request", AuditEvent.Result.SUCCESS)
+        return response
+
 
 class ConfirmPasswordResetView(PasswordResetConfirmView):
     template_name = "accounts/reset_confirm.html"
