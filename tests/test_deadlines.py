@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from audit.models import AuditEvent
-from cases.models import Case
+from cases.models import Case, CaseMembership
 from cases.views import upcoming_filter
 from work.models import Deadline
 from work.transitions import DEADLINE_TRANSITIONS, allows
@@ -216,6 +216,68 @@ class DeadlineResolutionTests(DeadlineTestCase):
             {"revision": self.deadline.revision},
         )
         self.assertEqual(response.status_code, 409)
+
+
+class DeadlineOwnershipTests(DeadlineTestCase):
+    """GitHub #26: every endpoint that takes an id must check ownership.
+
+    deadline_edit/resolve/reopen all route through deadline_for_action, which
+    scopes both the case (case_for_action) and the deadline itself
+    (deadlines_visible_to, filtered by that case) before any other check.
+    These guard the two ways that scoping can be bypassed: a swapped
+    cross-case id, and membership revoked after the page was first loaded.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.beta_deadline = Deadline.objects.create(
+            case=cls.beta,
+            title="Beta deadline",
+            type=Deadline.Type.HEARING,
+            due_at=timezone.now() + timedelta(days=10),
+            responsible_user=cls.other_attorney,
+            created_by=cls.other_attorney,
+        )
+
+    def test_a_cross_case_deadline_id_is_refused(self):
+        self.client.force_login(self.attorney)
+        attempts = (
+            ("cases:deadline_edit", {"revision": self.beta_deadline.revision}),
+            (
+                "cases:deadline_resolve",
+                {"revision": self.beta_deadline.revision, "status": Deadline.Status.COMPLETED},
+            ),
+            ("cases:deadline_reopen", {"revision": self.beta_deadline.revision}),
+        )
+        for name, payload in attempts:
+            with self.subTest(name=name):
+                response = self.client.post(self.url(name, self.beta_deadline.pk), payload)
+                self.assertEqual(response.status_code, 404)
+        self.beta_deadline.refresh_from_db()
+        self.assertEqual(self.beta_deadline.revision, 1)
+        self.assertEqual(self.beta_deadline.status, Deadline.Status.PENDING)
+
+    def test_revoked_membership_loses_access(self):
+        self.client.force_login(self.attorney)
+        edit_url = self.url("cases:deadline_edit", self.deadline.pk)
+        self.assertEqual(self.client.get(edit_url).status_code, 200)
+        CaseMembership.objects.filter(case=self.alpha, user=self.attorney).update(is_active=False)
+        attempts = (
+            ("cases:deadline_edit", {"revision": self.deadline.revision}),
+            (
+                "cases:deadline_resolve",
+                {"revision": self.deadline.revision, "status": Deadline.Status.COMPLETED},
+            ),
+            ("cases:deadline_reopen", {"revision": self.deadline.revision}),
+        )
+        for name, payload in attempts:
+            with self.subTest(name=name):
+                response = self.client.post(self.url(name, self.deadline.pk), payload)
+                self.assertEqual(response.status_code, 404)
+        self.deadline.refresh_from_db()
+        self.assertEqual(self.deadline.revision, 1)
+        self.assertEqual(self.deadline.status, Deadline.Status.PENDING)
 
 
 class DeadlineListTests(DeadlineTestCase):

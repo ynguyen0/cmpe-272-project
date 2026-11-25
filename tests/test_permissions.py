@@ -191,6 +191,8 @@ class PermissionMatrixTests(SeededTestCase):
             ("post", "task_reassign", [self.alpha.pk, beta_task.pk]),
             ("post", "task_complete", [self.beta.pk, beta_task.pk]),
             ("post", "task_complete", [self.alpha.pk, beta_task.pk]),
+            ("post", "task_status", [self.alpha.pk, beta_task.pk]),
+            ("post", "document_archive", [self.alpha.pk, beta_doc.pk]),
         )
         for method, name, ids in attempts:
             with self.subTest(name=name, ids=ids):
@@ -224,6 +226,20 @@ class PermissionMatrixTests(SeededTestCase):
         self.assertEqual(self.client.get(url).status_code, 404)
         self.assertEqual(
             self.client.post(edit_url, {"revision": self.document.revision}).status_code, 404
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse("cases:document_archive", args=[self.alpha.pk, self.document.pk]),
+                {"revision": self.document.revision},
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse("cases:task_status", args=[self.alpha.pk, self.task.pk]),
+                {"revision": self.task.revision, "status": Task.Status.DONE},
+            ).status_code,
+            404,
         )
         self.assertEqual(
             set(self.client.get(reverse("cases:index")).context["totals"].values()), {0}
