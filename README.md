@@ -4,6 +4,8 @@ LexFlow is a law firm case management prototype built as one Django application:
 Django templates and Bootstrap, PostgreSQL, and private filesystem documents.
 See the [architecture](docs/architecture.md), [release backlog](docs/release-1-backlog.md),
 and [team workflow/definition of done](CONTRIBUTING.md).
+Current [test results, defects, and presentation blockers](docs/test-results.md)
+are linked to the release requirements.
 The [database design and ER diagram](docs/database-design.md) define the fields,
 protected relationships, constraints, indexes, archive rules, and migration strategy.
 
@@ -143,7 +145,10 @@ creation, recovery, and deactivation.
 Browser tests start their own Django server and isolated test database; no development
 server or seeded development data is required. Missing browsers fail the check rather
 than silently skipping it. Development uses Django's normal password hashers; the fast
-hasher is confined to test settings. Test files are isolated in a temporary directory.
+hasher is confined to test settings. Test files are isolated in a temporary directory. The recovery test also requires
+PostgreSQL **16** `pg_dump` and `pg_restore` first on PATH and permission
+to create/drop uniquely named test recovery databases. It restores the database
+and documents together and verifies hashes and download permissions.
 
 Useful individual commands:
 
@@ -222,6 +227,11 @@ requests. The Jenkinsfile runs the same script on a preconfigured agent; see
   deliberately rotate the database role password; editing `.env` alone does not rotate it.
 - **Permission to create test DB denied:** give the dedicated local/CI role `CREATEDB`;
   do not grant application deployment users this permission.
+- **Recovery test reports `unrecognized configuration parameter "transaction_timeout"`:**
+  check `pg_dump --version` and `pg_restore --version`. Both must select the
+  PostgreSQL 16 clients for this project's version 16 server. Put the version 16
+  tools first on PATH; do not skip the recovery test. CI installs/selects these
+  clients explicitly.
 - **Missing Chromium/system libraries:** rerun the browser installation command above.
 - **Seed login fails after changing the demo password variable:** existing accounts
   keep their password. Use `uv run python manage.py changepassword attorney.a@example.test`.

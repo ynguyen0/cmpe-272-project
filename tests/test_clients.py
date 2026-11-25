@@ -63,7 +63,7 @@ class ClientManagementTests(SeededTestCase):
         events = AuditEvent.objects.filter(resource_type="client", resource_id=str(client.pk))
         self.assertSetEqual(
             set(events.values_list("action", flat=True)),
-            {"client.create", "client.view", "client.edit"},
+            {"client.create", "client.view", "client.edit", "validation.failed"},
         )
         # Order independent: the shared audit writer sorts field names so that
         # equivalent changes always produce identical rows.

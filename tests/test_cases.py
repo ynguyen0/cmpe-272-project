@@ -181,6 +181,7 @@ class CaseManagementTests(SeededTestCase):
                 "case.close",
                 "case.reopen",
                 "case.archive",
+                "validation.failed",
                 # Staff's status change, editing the closed case and reopening the
                 # archived one were all refused.
                 "access.denied",

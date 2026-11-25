@@ -129,3 +129,19 @@ rows or drop the table. Stronger tamper resistance (shipping events to a
 separate write-once store, hash-chaining rows, or restricting the application's
 database role) is a later operational enhancement and is out of scope for
 release 1.
+
+
+## Validation and conflict failures
+
+Authenticated case-domain GET/POST responses with status 400 or 409 also record
+one `validation.failed` event with result `failure`. This includes invalid forms,
+invalid list/audit filters and stale writes. The event is written after the view's
+transaction finishes, using only the actor and URL resource context; submitted
+values, query strings, completion notes and error messages are never copied into
+the event. A create URL may identify the parent case because no child record was
+created. Account screens retain their existing explicit failure capture. Audit
+storage failure fails the request rather than silently accepting missing evidence.
+
+`ValidationAuditTests` in [release quality tests](../tests/test_release_quality.py)
+verify invalid deadline, stale task and invalid audit-filter outcomes, redaction,
+and unchanged business data.

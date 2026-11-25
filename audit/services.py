@@ -94,6 +94,7 @@ class Action:
 
     # Authorization outcomes (ACCESS-01).
     ACCESS_DENIED = "access.denied"
+    VALIDATION_FAILED = "validation.failed"
 
     # Audit review (LOG-02).
     AUDIT_LOG_READ = "audit_log.read"

@@ -95,3 +95,81 @@ This schema step is implemented locally; complete release feature stories remain
 ## Submission record
 
 TBA. Fill in the confirmed instructor deadline, team leader, release commit/tag, final report, presentation, demonstration video/file, source repository, test report, known limitations, and submission confirmation when available. Do not mark submission complete without evidence.
+
+
+## Functional, integration, security and usability testing — 2026-11-25
+
+Owner: Codex; independent team review and open-feature owners remain pending.
+Requirements: ACCESS-01, AUTH-01/02, USER-01/02, CLIENT-01/03, CASE-01/04,
+DOC-01/02/03, TASK-01/02/03, DATE-01/02, DASH-01, LOG-01/02, DEL-01/02.
+
+Added a protected HTTP route inventory and denial/no-business-change checks,
+fixed-date and DST validation regressions, a two-session stale-editor scenario,
+a combined browser intake/case/file/task/revocation/closure journey, and a real
+PostgreSQL plus private-document recovery drill. The shared check includes the
+new modules. Regressions reproduced and fixed date-only task acceptance and
+ignored unexpected multipart fields. Interactive exploration as all three roles
+also led to useful generic 403/404 pages with navigation back to the workspace.
+
+[Results, reproduction steps, severity, ownership, retests and limitations](test-results.md)
+are the current evidence for this step. The development database and existing
+private files were not used as test fixtures. No schema or dependency changes.
+Deadline creation/resolution, complete task transitions, date summaries and full
+audit acceptance remain open; presentation sign-off is blocked. This is local
+working-tree evidence, not a commit, hosted CI run, human review or completed
+release demonstration.
+
+
+## Merge integration retest — 2026-11-25
+
+Owner: Codex. Integrated main `87150abaf29abae9b32ec709317e9c1aedc17a15`
+into testing parent `07cf9c4`. Resolved `cases/forms.py` by retaining date/time
+validation plus incoming audit/date imports, and `scripts/check.sh` by retaining
+every feature, security and recovery test module. No test group was dropped.
+
+Expanded the protected-operation inventory from 22 to all 32 routes and extended
+Chromium coverage through task edits/status/reopen, deadline create/edit/resolve/
+reopen/cancel, dashboard refresh, closure, audit filtering and invalid ranges.
+Applied explicit date/time validation and unexpected-file rejection to the
+incoming forms after regressions reproduced both gaps. A further audit regression
+showed 400/409 case-domain responses lacked failure events; middleware now records
+redacted `validation.failed` events after view transactions, with no form/filter
+contents. Account validation retains its existing explicit capture.
+
+The merged 181 Django + 10 Chromium check passed before the final three audit
+regressions were added. See [current test results](test-results.md) for the final
+run, closed Q-004–Q-007 defects, and remaining review/operational limits. Interactive
+retesting also resolved a synthetic overdue deadline (dashboard 1 → 0) and filtered
+its resolution event as the granted administrator. Temporary databases/files were
+cleaned up. Existing development data and uploads were not changed. This entry
+does not claim a hosted CI result or independent review.
+
+Final retest: `UV_CACHE_DIR=/private/tmp/lexflow-uv-cache sh scripts/check.sh`
+exited 0: **184 Django + 10 Chromium tests passed, no skips**, no known dependency
+vulnerabilities, clean format/lint/system/migration-drift checks, successful schema
+round trip and paired database/document restore. Two existing exact-event tests
+were updated to expect the newly required validation failure events. Conflicts are
+resolved and the merge changes are staged for review; no merge commit or push was
+created by this retest.
+
+
+## PostgreSQL restore client compatibility fix — 2026-11-25
+
+Owner: Codex. Requirements: DEL-01/02. GitHub Actions run 45686459157 failed the
+recovery test at `46e78c3`, despite the earlier local pass. The service log exposed
+`SET transaction_timeout = 0` as unsupported on PostgreSQL 16; `ubuntu-latest`
+resolved to Ubuntu 26.04 and no matching client major had been selected.
+
+Reproduced the exact failure with Linux PostgreSQL 17 clients against temporary
+databases on the version 16.13 server, then confirmed version 16.13 clients restore
+successfully. Pinned CI to Ubuntu 24.04 with explicitly installed/selected version
+16 clients and version logging. Preserved the complete recovery drill and added
+restore stderr to its failure assertion. Updated README and runner prerequisites.
+See [test results](test-results.md#hosted-ci-recovery-failure-and-client-compatibility-fix--2026-11-25)
+for evidence and the distinction between local verification and pending hosted CI.
+
+Retest completed: shared check exited 0 with 184 Django and 10 Chromium tests
+passing, no skips, no known dependency vulnerabilities, and clean format/lint/
+system/migration checks. Matching Linux version 16.13 clients also restored with
+exit 0 in the isolated reproduction. Hosted confirmation remains pending commit
+and push of this workflow change.

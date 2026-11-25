@@ -110,7 +110,29 @@ class AccessDenialAuditMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        return self.get_response(request)
+        response = self.get_response(request)
+        match = getattr(request, "resolver_match", None)
+        actor = getattr(request, "user", None)
+        if (
+            response.status_code in {400, 409}
+            and request.method in {"GET", "POST"}
+            and match is not None
+            and match.namespace == "cases"
+            and actor is not None
+            and actor.is_authenticated
+        ):
+            # The view's atomic block has finished. Retain rejected validation
+            # and stale-write outcomes without submitted values or error text.
+            # Account views already capture their own validation failures.
+            resource_type, _, record_id = denial_target(request)
+            record_event(
+                actor=actor,
+                action=Action.VALIDATION_FAILED,
+                resource_type=resource_type,
+                resource_id=str(record_id),
+                result=AuditEvent.Result.FAILURE,
+            )
+        return response
 
     def process_exception(self, request, exception):
         if not isinstance(exception, PermissionDenied | Http404):

@@ -1,6 +1,8 @@
+import re
 from datetime import UTC, datetime, time, timedelta
 
 from django import forms
+from django.conf import settings
 from django.core.validators import RegexValidator
 from django.utils import timezone
 
@@ -307,7 +309,23 @@ class DocumentEditForm(StrictFields, forms.ModelForm):
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
 
+class RequiredDateTimeField(forms.DateTimeField):
+    def to_python(self, value):
+        if isinstance(value, str) and value.strip() and not re.search(r"[T ]\d{2}:\d{2}", value):
+            raise forms.ValidationError("Enter both a date and time.")
+        return super().to_python(value)
+
+
+def required_date_time_field():
+    return RequiredDateTimeField(
+        widget=forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local"}),
+        help_text=f"Enter a date and time in the firm's {settings.TIME_ZONE} timezone.",
+    )
+
+
 class TaskAssignmentForm(StrictFields, forms.ModelForm):
+    due_at = required_date_time_field()
+
     class Meta:
         model = Task
         fields = ("title", "description", "assignee", "priority", "due_at")
@@ -333,7 +351,7 @@ class TaskDetailsForm(RevisionForm):
         max_length=2000, required=False, widget=forms.Textarea(attrs={"rows": 3})
     )
     priority = forms.ChoiceField(choices=Task.Priority.choices)
-    due_at = forms.DateTimeField()
+    due_at = required_date_time_field()
 
 
 class TaskStatusForm(RevisionForm):
@@ -375,6 +393,8 @@ class WorkFilterForm(StrictFields, forms.Form):
 class DeadlineForm(StrictFields, forms.ModelForm):
     """Record a new deadline on a case (DATE-01)."""
 
+    due_at = required_date_time_field()
+
     class Meta:
         model = Deadline
         fields = ("title", "type", "due_at", "responsible_user", "notes")
@@ -392,7 +412,7 @@ class DeadlineDetailsForm(RevisionForm):
 
     title = forms.CharField(max_length=200)
     type = forms.ChoiceField(choices=Deadline.Type.choices)
-    due_at = forms.DateTimeField()
+    due_at = required_date_time_field()
     responsible_user = forms.ModelChoiceField(queryset=User.objects.none())
     notes = forms.CharField(
         max_length=2000, required=False, widget=forms.Textarea(attrs={"rows": 3})
