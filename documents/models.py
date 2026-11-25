@@ -44,7 +44,9 @@ class Document(RevisionedModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=["case", "state", "category"], name="document_case_list_idx")
+            models.Index(fields=["case", "state", "category"], name="document_case_list_idx"),
+            # Dashboard "recent activity" (DASH-01).
+            models.Index(fields=["case", "updated_at"], name="document_case_recent_idx"),
         ]
         constraints = [
             *revision_checks(),

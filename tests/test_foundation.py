@@ -53,7 +53,7 @@ class AuthenticationTests(SeededTestCase):
             reverse("accounts:login"),
             {"username": "ATTORNEY.A@EXAMPLE.TEST", "password": DEMO_PASSWORD},
         )
-        self.assertRedirects(response, reverse("cases:index"))
+        self.assertRedirects(response, reverse("cases:dashboard"))
         cookie = self.client.cookies[settings.SESSION_COOKIE_NAME].value
         self.assertEqual(self.client.get(reverse("accounts:logout")).status_code, 405)
         self.assertRedirects(

@@ -4,7 +4,9 @@ from . import views
 
 app_name = "cases"
 urlpatterns = [
-    path("", views.index, name="index"),
+    path("", views.dashboard, name="dashboard"),
+    path("cases/", views.index, name="index"),
+    path("search/", views.search, name="search"),
     path("clients/", views.client_index, name="clients"),
     path("clients/new/", views.client_create, name="client_create"),
     path("clients/<int:pk>/", views.client_detail, name="client_detail"),

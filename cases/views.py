@@ -1,5 +1,3 @@
-from datetime import datetime, time, timedelta
-
 from django import forms
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -26,6 +24,7 @@ from documents.uploads import safe_filename
 from work.models import Deadline, Task
 from work.transitions import DEADLINE_TRANSITIONS, TASK_TRANSITIONS, allows
 
+from .dashboard import recent_activity, search_everything, work_cards
 from .forms import (
     AuditFilterForm,
     CaseClientForm,
@@ -45,6 +44,7 @@ from .forms import (
     DocumentEditForm,
     DocumentListForm,
     DocumentUploadForm,
+    GlobalSearchForm,
     RevisionForm,
     TaskAssignmentForm,
     TaskDetailsForm,
@@ -85,8 +85,60 @@ from .services import (
     require_editable,
     update_case_team,
 )
+from .worklists import (
+    open_cases,
+    overdue_filter,
+    pending_upcoming_deadlines,
+    unfinished_upcoming_tasks,
+    upcoming_filter,  # noqa: F401 - re-exported for existing callers
+)
 
 FORM_METHODS = ["GET", "HEAD", "POST"]
+
+
+@login_required
+@require_safe
+def dashboard(request):
+    """What needs the signed-in user's attention (DASH-01).
+
+    Counts and previews come from the same scoped queries as the lists they
+    link to; a user with no assignments sees zeros and empty states only.
+    """
+    user = request.user
+    now = timezone.now()
+    context = {
+        "cards": work_cards(user, now),
+        "activity": recent_activity(user),
+        "search_form": GlobalSearchForm(),
+        "now": now,
+        "can_create": has_capability(user, Action.CREATE_RECORDS),
+        "can_view_audit": has_capability(user, Action.VIEW_AUDIT),
+    }
+    if request.method == "GET":
+        audit_event(request, "dashboard.read", "dashboard")
+    return render(request, "cases/dashboard.html", context)
+
+
+@login_required
+@require_safe
+def search(request):
+    """Search authorized cases and clients by names, references and metadata."""
+    form = GlobalSearchForm(request.GET)
+    results = None
+    if form.is_valid():
+        results = search_everything(request.user, form.cleaned_data["q"])
+        if request.method == "GET":
+            # Same actions as the case and client lists; the query text is never logged.
+            audit_event(request, "case.search", "case")
+            audit_event(request, "client.search", "client")
+    response = render(
+        request,
+        "cases/search.html",
+        {"form": form, "results": results},
+        status=200 if results is not None else 400,
+    )
+    response["Referrer-Policy"] = "origin"
+    return response
 
 
 @login_required
@@ -99,7 +151,10 @@ def index(request):
     if form.is_valid():
         data = form.cleaned_data
         results = cases.filter(is_archived=data["status"] == "archived")
-        if data["status"] and data["status"] != "archived":
+        if data["status"] == "open":
+            # The dashboard's "open cases" count links here (DASH-01).
+            results = open_cases(user)
+        elif data["status"] and data["status"] != "archived":
             results = results.filter(status=data["status"])
         if data["type"]:
             results = results.filter(type=data["type"])
@@ -864,20 +919,6 @@ def task_complete(request, pk, task_pk):
     )
 
 
-def overdue_filter(queryset, model, now=None):
-    """Unfinished work whose due instant has passed (TASK-03, DATE-02).
-
-    Overdue is "due before now and not finished", so completed or cancelled work
-    never counts however old it is.
-    """
-    finished = (
-        [Task.Status.DONE]
-        if model is Task
-        else [Deadline.Status.COMPLETED, Deadline.Status.CANCELLED]
-    )
-    return queryset.filter(due_at__lt=now or timezone.now()).exclude(status__in=finished)
-
-
 @login_required
 @require_safe
 def work_index(request):
@@ -889,7 +930,11 @@ def work_index(request):
     """
     user = request.user
     tasks = tasks_visible_to(user).filter(is_archived=False)
-    colleagues = User.objects.filter(pk__in=tasks.values("assignee_id")).order_by("full_name", "pk")
+    # The viewer is always a choice, so the dashboard's "my tasks" links work
+    # even when they currently have no tasks.
+    colleagues = User.objects.filter(
+        Q(pk__in=tasks.values("assignee_id")) | Q(pk=user.pk)
+    ).order_by("full_name", "pk")
     form = WorkFilterForm(request.GET or None, choices=colleagues)
     page = None
     if not request.GET:
@@ -905,8 +950,10 @@ def work_index(request):
             tasks = tasks.filter(status=data["status"])
         if data["priority"]:
             tasks = tasks.filter(priority=data["priority"])
-        if data["overdue"]:
+        if data["overdue"] or data["window"] == "overdue":
             tasks = overdue_filter(tasks, Task)
+        elif data["window"] == "upcoming":
+            tasks = unfinished_upcoming_tasks(tasks)
         paginator = Paginator(tasks.select_related("case", "assignee").order_by("due_at", "pk"), 25)
         number = data["page"] or 1
         if number > paginator.num_pages:
@@ -989,19 +1036,6 @@ def task_status(request, pk, task_pk):
     return form_response(request, form, "Change task status")
 
 
-def upcoming_filter(queryset, now=None):
-    """Pending work due from now through the end of firm-local day +7, inclusive.
-
-    The window is computed in the firm timezone and then converted back, so the
-    boundary lands on a real local midnight rather than a UTC one. That keeps the
-    edge correct across daylight-saving changes.
-    """
-    now = now or timezone.now()
-    firm_day = timezone.localtime(now).date() + timedelta(days=7)
-    end = timezone.make_aware(datetime.combine(firm_day, time.max), timezone.get_default_timezone())
-    return queryset.filter(due_at__gte=now, due_at__lte=end)
-
-
 @login_required
 @require_safe
 def deadline_index(request):
@@ -1027,7 +1061,7 @@ def deadline_index(request):
         if data["window"] == "overdue":
             deadlines = overdue_filter(deadlines, Deadline)
         elif data["window"] == "upcoming":
-            deadlines = upcoming_filter(deadlines.filter(status=Deadline.Status.PENDING))
+            deadlines = pending_upcoming_deadlines(deadlines)
         paginator = Paginator(
             deadlines.select_related("case", "responsible_user").order_by("due_at", "pk"), 25
         )

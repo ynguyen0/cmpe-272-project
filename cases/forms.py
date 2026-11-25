@@ -120,7 +120,12 @@ class CaseSearchForm(StrictFields, forms.Form):
     )
     status = forms.ChoiceField(
         required=False,
-        choices=[("", "Unarchived"), *Case.Status.choices, ("archived", "Archived")],
+        choices=[
+            ("", "Unarchived"),
+            ("open", "Not closed"),
+            *Case.Status.choices,
+            ("archived", "Archived"),
+        ],
     )
     type = forms.ChoiceField(required=False, choices=[("", "All types"), *Case.Type.choices])
     sort = forms.ChoiceField(
@@ -355,6 +360,10 @@ class WorkFilterForm(StrictFields, forms.Form):
     status = forms.ChoiceField(choices=[("", "Any")] + Task.Status.choices, required=False)
     priority = forms.ChoiceField(choices=[("", "Any")] + Task.Priority.choices, required=False)
     overdue = forms.BooleanField(required=False, label="Overdue only")
+    window = forms.ChoiceField(
+        choices=[("", "All"), ("overdue", "Overdue"), ("upcoming", "Due in the next 7 days")],
+        required=False,
+    )
     page = forms.IntegerField(min_value=1, required=False, widget=forms.HiddenInput)
 
     def __init__(self, *args, choices, **kwargs):
@@ -506,3 +515,11 @@ class AuditFilterForm(StrictFields, forms.Form):
             if data[field]:
                 events = events.filter(**{field: data[field]})
         return events.order_by("-occurred_at", "-pk")
+class GlobalSearchForm(StrictFields, forms.Form):
+    """One query across authorized cases and clients (DASH-01, issue #17)."""
+
+    q = forms.CharField(
+        max_length=150,
+        label="Search Cases And Clients",
+        widget=forms.TextInput(attrs={"type": "search"}),
+    )

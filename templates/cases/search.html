@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Search · LexFlow{% endblock %}
+{% block content %}
+<a href="{% url 'cases:dashboard' %}">Back To Dashboard</a>
+<header class="case-heading mt-3 mb-4"><h1>Search</h1></header>
+<div class="register-sheet">
+  <form method="get" class="record-filters dash-search-form" role="search">
+    {{ form.non_field_errors }}
+    <div>{{ form.q.label_tag }} {{ form.q }} {{ form.q.errors }}</div>
+    <button type="submit" class="btn btn-secondary">Search</button>
+    <div class="form-text">Search By Case Reference, Title, Or Docket Number, Or By Client Name, ID, Email, Or Phone.</div>
+  </form>
+</div>
+{% if results is not None %}
+  <div class="dash-grid">
+    {% for section in results.values %}
+      <section class="register-sheet" aria-labelledby="results-{{ section.key }}">
+        <div class="register-heading">
+          <h2 id="results-{{ section.key }}">{{ section.title }}</h2>
+          <p>{{ section.count }} Result{{ section.count|pluralize }}{% if section.count %} · <a href="{{ section.url }}">View All</a>{% endif %}</p>
+        </div>
+        <div class="table-responsive">
+          <table class="table record-table case-table">
+            <caption class="visually-hidden">Matching {{ section.title }}</caption>
+            {% if section.key == 'cases' %}
+              <thead><tr><th scope="col">Reference</th><th scope="col">Title</th><th scope="col">Status</th></tr></thead>
+            {% else %}
+              <thead><tr><th scope="col">Client</th><th scope="col">Client ID</th><th scope="col">Type</th></tr></thead>
+            {% endif %}
+            <tbody>
+            {% for item in section.items %}
+              {% if section.key == 'cases' %}
+                <tr>
+                  <td class="case-reference"><a class="record-ref" href="{% url 'cases:detail' item.pk %}">{{ item.number }}</a></td>
+                  <td class="record-title">{{ item.title }}</td>
+                  <td><span class="record-status" data-status="{{ item.status }}">{{ item.status }}</span></td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td class="case-reference"><a class="record-ref" href="{% url 'cases:client_detail' item.pk %}">{{ item.name }}</a></td>
+                  <td>#{{ item.pk }}</td>
+                  <td>{{ item.type }}</td>
+                </tr>
+              {% endif %}
+            {% empty %}
+              <tr><td class="record-empty" colspan="3">{{ section.empty }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if section.count > section.items|length %}
+          <p class="dash-more">Showing {{ section.items|length }} Of {{ section.count }}. <a href="{{ section.url }}">View All</a>.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

@@ -10,7 +10,7 @@
     <div>{{ form.assignee.label_tag }} {{ form.assignee }} {{ form.assignee.errors }}</div>
     <div>{{ form.status.label_tag }} {{ form.status }} {{ form.status.errors }}</div>
     <div>{{ form.priority.label_tag }} {{ form.priority }} {{ form.priority.errors }}</div>
-    <div class="form-check">{{ form.overdue }} {{ form.overdue.label_tag }}</div>
+    <div><label for="{{ form.window.id_for_label }}">Due</label> {{ form.window }} {{ form.window.errors }}</div>
     <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
   </div>
   {{ form.page.errors }}
