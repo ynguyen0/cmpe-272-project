@@ -133,9 +133,10 @@ uv run playwright install chromium
 sh scripts/check.sh
 ```
 
-The shared script runs Ruff format/lint checks, Django checks, migration drift checks,
-authentication/foundation/schema tests, a historical migration round trip, and
-Chromium workflows for case access, account creation, recovery, and deactivation.
+The shared script runs a `pip-audit` dependency vulnerability scan, Ruff format/lint
+checks, Django checks, migration drift checks, authentication/foundation/schema tests,
+a historical migration round trip, and Chromium workflows for case access, account
+creation, recovery, and deactivation.
 Browser tests start their own Django server and isolated test database; no development
 server or seeded development data is required. Missing browsers fail the check rather
 than silently skipping it. Development uses Django's normal password hashers; the fast
@@ -144,6 +145,7 @@ hasher is confined to test settings. Test files are isolated in a temporary dire
 Useful individual commands:
 
 ```sh
+uv run pip-audit
 uv run ruff format .
 uv run ruff check .
 uv run python manage.py test tests.test_foundation --settings=config.settings.test --noinput

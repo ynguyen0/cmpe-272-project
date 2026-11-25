@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 
+uv run --locked pip-audit
 uv run --locked ruff format --check .
 uv run --locked ruff check .
 uv run --locked python manage.py check --settings=config.settings.test
