@@ -135,3 +135,38 @@ that every release story or presentation deliverable is complete. Independent te
 review, the full D1–D10 rehearsal, browser breadth beyond Chromium, hosted
 scanning/HTTPS/SMTP, production restore rehearsal, hosted CI results, and final
 presentation artifacts remain outside this local run's evidence.
+
+
+## Hosted CI recovery failure and client compatibility fix — 2026-11-25
+
+Affected requirements: DEL-01/02. Tested source: `46e78c3` plus the working-tree CI
+and diagnostic fix. [Hosted run 45686459157](https://github.com/ynguyen0/cmpe-272-project/actions/runs/45686459157)
+failed on the recovery test. The PostgreSQL service log shows
+`unrecognized configuration parameter "transaction_timeout"` for
+`SET transaction_timeout = 0;`. The runner was `ubuntu-26.04` via `ubuntu-latest`,
+and the workflow had not selected a matching PostgreSQL client major.
+
+Q-008 (S1, CI/recovery gate; owner Codex): newer dump/restore clients generated a
+statement unsupported by the version 16 server. The earlier local passes used
+PostgreSQL 16.13 clients and therefore did not reproduce the hosted environment.
+The failure prevented browser tests from starting in that hosted run.
+
+Reproduction used two disposable empty databases on the existing PostgreSQL 16.13
+service and Linux clients from locally available Docker images. PostgreSQL 17
+`pg_dump`/`pg_restore` reproduced exit 1 with the exact `transaction_timeout` error;
+PostgreSQL 16.13 clients restored successfully with exit 0. Both temporary databases
+were dropped; development data/files were not changed.
+
+Fix: pin the GitHub runner to `ubuntu-24.04`, explicitly install
+`postgresql-client-16`, put its binary directory first on PATH, and print both
+client versions in the log. The recovery test now includes captured restore stderr
+in its assertion, rather than exposing only a generic subprocess exit status.
+The test is retained and still restores real database/file data and checks hashes
+and authorization.
+
+Final local check: `UV_CACHE_DIR=/private/tmp/lexflow-uv-cache sh scripts/check.sh`
+exited 0: **184 Django + 10 Chromium tests passed (194 total), zero skips**.
+Dependency audit, format/lint, Django checks, migration drift and the real recovery
+drill passed. Q-008 is fixed locally with matching Linux-client reproduction
+verified; a new hosted run of the changed workflow is still required after
+publishing this fix. The failed hosted run is not marked as passed by local results.

@@ -67,7 +67,7 @@ class RecoveryTests(TransactionTestCase):
                     )
                 )
                 try:
-                    subprocess.run(
+                    restore = subprocess.run(
                         [
                             "pg_restore",
                             "--exit-on-error",
@@ -78,8 +78,15 @@ class RecoveryTests(TransactionTestCase):
                             str(backup / "database.dump"),
                         ],
                         env=env,
-                        check=True,
+                        check=False,
                         capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(
+                        restore.returncode,
+                        0,
+                        "pg_restore failed (use PostgreSQL 16 clients for this service):\n"
+                        f"{restore.stderr}",
                     )
                     # A separate process proves reads come from the restored DB and files,
                     # without routing any request to the source database or media tree.

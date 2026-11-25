@@ -50,13 +50,18 @@ configured. Full release completion remains governed by the backlog's release ch
 
 ## CI runners
 
-GitHub Actions is the primary pull request check. It installs Python 3.12, pinned uv,
-locked dependencies, Chromium/system packages, and a dedicated PostgreSQL service.
+GitHub Actions is the primary pull request check. Its runner is pinned to Ubuntu
+24.04 and explicitly installs PostgreSQL 16 backup/restore clients, placing
+`/usr/lib/postgresql/16/bin` first on PATH to match the PostgreSQL 16 service.
+Both client versions are printed in the job log. It also installs Python 3.12,
+pinned uv, locked dependencies, and Chromium/system packages.
 Its database password is a public, ephemeral CI-only value, never deployment credentials.
 Its signing key is generated for each job. Workflow permissions are read-only.
 
 For Jenkins, provision Python 3.12, uv 0.12.15, Chromium system dependencies, and a
-dedicated PostgreSQL service with test database creation permission. Inject
+dedicated PostgreSQL service with test database creation permission. Install
+PostgreSQL 16 `pg_dump` and `pg_restore` and put their directory first on PATH;
+newer clients can emit restore statements unsupported by the version 16 server. Inject
 `DJANGO_SECRET_KEY`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
 `POSTGRES_HOST`, and optionally port/test database through Jenkins credentials/environment,
 never the Jenkinsfile. The pipeline installs locked packages and Chromium, then runs the

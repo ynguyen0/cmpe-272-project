@@ -151,3 +151,25 @@ round trip and paired database/document restore. Two existing exact-event tests
 were updated to expect the newly required validation failure events. Conflicts are
 resolved and the merge changes are staged for review; no merge commit or push was
 created by this retest.
+
+
+## PostgreSQL restore client compatibility fix — 2026-11-25
+
+Owner: Codex. Requirements: DEL-01/02. GitHub Actions run 45686459157 failed the
+recovery test at `46e78c3`, despite the earlier local pass. The service log exposed
+`SET transaction_timeout = 0` as unsupported on PostgreSQL 16; `ubuntu-latest`
+resolved to Ubuntu 26.04 and no matching client major had been selected.
+
+Reproduced the exact failure with Linux PostgreSQL 17 clients against temporary
+databases on the version 16.13 server, then confirmed version 16.13 clients restore
+successfully. Pinned CI to Ubuntu 24.04 with explicitly installed/selected version
+16 clients and version logging. Preserved the complete recovery drill and added
+restore stderr to its failure assertion. Updated README and runner prerequisites.
+See [test results](test-results.md#hosted-ci-recovery-failure-and-client-compatibility-fix--2026-11-25)
+for evidence and the distinction between local verification and pending hosted CI.
+
+Retest completed: shared check exited 0 with 184 Django and 10 Chromium tests
+passing, no skips, no known dependency vulnerabilities, and clean format/lint/
+system/migration checks. Matching Linux version 16.13 clients also restored with
+exit 0 in the isolated reproduction. Hosted confirmation remains pending commit
+and push of this workflow change.
