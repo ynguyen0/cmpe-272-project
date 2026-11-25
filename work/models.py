@@ -36,6 +36,8 @@ class Task(RevisionedModel):
                 fields=["assignee", "is_archived", "status", "due_at"], name="task_worklist_idx"
             ),
             models.Index(fields=["case", "status"], name="task_case_status_idx"),
+            # Dashboard "recent activity" (DASH-01).
+            models.Index(fields=["case", "updated_at"], name="task_case_recent_idx"),
         ]
         constraints = [
             *revision_checks(),
@@ -91,6 +93,8 @@ class Deadline(RevisionedModel):
                 name="deadline_worklist_idx",
             ),
             models.Index(fields=["case", "status", "due_at"], name="deadline_case_dates_idx"),
+            # Dashboard "recent activity" (DASH-01).
+            models.Index(fields=["case", "updated_at"], name="deadline_case_recent_idx"),
         ]
         constraints = [
             *revision_checks(),

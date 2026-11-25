@@ -8,8 +8,11 @@ The [database design and ER diagram](docs/database-design.md) define the fields,
 protected relationships, constraints, indexes, archive rules, and migration strategy.
 
 The application provides email sign-in, password recovery, account administration,
-and membership-scoped case and client workflows. The dashboard, search results, task
-actions, and private downloads use the same case access rules. Remaining release
+and membership-scoped case and client workflows. Signing in opens the dashboard (`/`),
+which summarizes open cases, overdue and upcoming tasks and deadlines, and recent
+activity, with one search box across cases and clients; the case list is at `/cases/`.
+The dashboard, search results, task actions, and private downloads use the same case
+access rules. Remaining release
 workflows are tracked in the backlog.
 
 ## Prerequisites

@@ -46,7 +46,7 @@ class AccountBrowserTests(StaticLiveServerTestCase):
             colleague.get_by_label("Email", exact=True).fill(email)
             colleague.get_by_label("Password", exact=True).fill(new_password)
             colleague.get_by_role("button", name="Sign in", exact=True).click()
-            expect(colleague.get_by_role("heading", name="My cases")).to_be_visible()
+            expect(colleague.get_by_role("heading", name="Dashboard")).to_be_visible()
 
             admin.get_by_role("link", name="Edit access for Colleague").click()
             admin.get_by_label("Status").select_option("inactive")
