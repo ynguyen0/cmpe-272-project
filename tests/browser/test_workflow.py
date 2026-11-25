@@ -22,6 +22,9 @@ class SignInWorkflowTests(StaticLiveServerTestCase):
             expect(page.get_by_role("alert")).to_be_visible()
             page.get_by_label("Password", exact=True).fill(password)
             page.get_by_role("button", name="Sign in", exact=True).click()
+            expect(page.get_by_role("heading", name="Dashboard", exact=True)).to_be_visible()
+            expect(page.get_by_role("link", name="DEMO-ALPHA", exact=True).first).to_be_visible()
+            page.get_by_role("link", name="Cases", exact=True).click()
             expect(page.get_by_role("heading", name="My cases", exact=True)).to_be_visible()
             expect(page.get_by_text("Fictional Alpha matter", exact=True)).to_be_visible()
             # Prove the vendored stylesheet is actually served and applied.
@@ -129,7 +132,8 @@ class DocumentWorkflowTests(StaticLiveServerTestCase):
             page.get_by_label("Email", exact=True).fill("attorney.a@example.test")
             page.get_by_label("Password", exact=True).fill(password)
             page.get_by_role("button", name="Sign in", exact=True).click()
-            page.get_by_role("link", name="DEMO-ALPHA", exact=True).click()
+            # The dashboard links the case from several cards; any of them opens it.
+            page.get_by_role("link", name="DEMO-ALPHA", exact=True).first.click()
             page.get_by_role("link", name="Upload document", exact=True).click()
 
             title = "Fictional hearing notes"

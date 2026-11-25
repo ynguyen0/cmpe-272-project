@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · LexFlow{% endblock %}
+{% block content %}
+<header class="case-masthead">
+  <div class="case-heading">
+    <h1>Dashboard</h1>
+    {% if can_create or can_view_audit or user.is_administrator %}
+      <div class="page-actions">
+        {% if user.is_administrator %}<a href="{% url 'accounts:list' %}">Manage Accounts</a>{% endif %}
+        {% if can_view_audit %}<a href="{% url 'cases:audit' %}">Audit Records</a>{% endif %}
+        {% if can_create %}
+          <a href="{% url 'cases:client_create' %}">Create Client</a>
+          <a class="btn btn-primary" href="{% url 'cases:create' %}"><span aria-hidden="true">+</span> Create Case</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+  <dl class="case-totals dash-totals" aria-label="Work Summary">
+    {% for card in cards %}
+      <div><dt><a href="{{ card.url }}">{{ card.label }}</a></dt><dd>{{ card.count }}</dd></div>
+    {% endfor %}
+  </dl>
+</header>
+
+<section class="register-section register-sheet" aria-labelledby="search-heading">
+  <div class="register-heading"><h2 id="search-heading">Search</h2></div>
+  <form method="get" action="{% url 'cases:search' %}" class="record-filters dash-search-form" role="search">
+    <div>{{ search_form.q.label_tag }} {{ search_form.q }}</div>
+    <button type="submit" class="btn btn-secondary">Search</button>
+    <div class="form-text">Search By Case Reference, Title, Or Docket Number, Or By Client Name, ID, Email, Or Phone.</div>
+  </form>
+</section>
+
+<div class="dash-grid">
+  {% for card in cards %}
+    <section class="register-sheet" aria-labelledby="card-{{ card.key }}">
+      <div class="register-heading">
+        <h2 id="card-{{ card.key }}">{{ card.title }}</h2>
+        <p>{{ card.count }} Result{{ card.count|pluralize }} · <a href="{{ card.url }}">View All</a></p>
+      </div>
+      <div class="table-responsive">
+        <table class="table record-table case-table">
+          <caption class="visually-hidden">{{ card.title }}</caption>
+          <thead><tr>
+            <th scope="col">Reference</th>
+            <th scope="col">{% if card.key == 'cases' %}Title{% elif card.key in 'overdue_tasks upcoming_tasks' %}Task{% else %}Deadline{% endif %}</th>
+            <th scope="col">{% if card.key == 'cases' %}Status{% else %}Due{% endif %}</th>
+          </tr></thead>
+          <tbody>
+          {% for item in card.items %}
+            {% if card.key == 'cases' %}
+              <tr>
+                <td class="case-reference"><a class="record-ref" href="{% url 'cases:detail' item.pk %}">{{ item.number }}</a></td>
+                <td class="record-title">{{ item.title }}</td>
+                <td><span class="record-status" data-status="{{ item.status }}">{{ item.status }}</span></td>
+              </tr>
+            {% else %}
+              <tr>
+                <td class="case-reference"><a class="record-ref" href="{% url 'cases:detail' item.case_id %}">{{ item.case.number }}</a></td>
+                <td class="record-title">{{ item.title }}</td>
+                <td class="record-date">{{ item.due_at|date:"Y-m-d H:i" }}{% if item.due_at < now %} <span class="badge text-bg-danger">Overdue</span>{% endif %}</td>
+              </tr>
+            {% endif %}
+          {% empty %}
+            <tr><td class="record-empty" colspan="3">{{ card.empty }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endfor %}
+
+  <section class="register-sheet" aria-labelledby="card-activity">
+    <div class="register-heading">
+      <h2 id="card-activity">Recent Activity</h2>
+      <p>Latest Changes In Your Cases</p>
+    </div>
+    <div class="table-responsive">
+      <table class="table record-table case-table">
+        <caption class="visually-hidden">Recent Activity</caption>
+        <thead><tr><th scope="col">Reference</th><th scope="col">Record</th><th scope="col">Updated</th></tr></thead>
+        <tbody>
+        {% for row in activity %}
+          <tr>
+            <td class="case-reference"><a class="record-ref" href="{% url 'cases:detail' row.case.pk %}">{{ row.case.number }}</a></td>
+            <td class="record-title">{{ row.label }} <span class="dash-kind">{{ row.kind }}</span></td>
+            <td class="record-date">{{ row.when|date:"Y-m-d H:i" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td class="record-empty" colspan="3">No Recent Activity In Your Cases.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

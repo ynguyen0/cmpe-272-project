@@ -120,7 +120,7 @@ STORAGES = {
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "accounts:login"
-LOGIN_REDIRECT_URL = "cases:index"
+LOGIN_REDIRECT_URL = "cases:dashboard"
 LOGOUT_REDIRECT_URL = "accounts:login"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
