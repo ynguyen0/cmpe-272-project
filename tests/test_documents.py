@@ -261,6 +261,7 @@ class DocumentManagementTests(SeededTestCase):
 
         def check_private_staging(args, **kwargs):
             self.assertEqual(args[:3], ["/test/clamdscan", "--fdpass", "--no-summary"])
+            self.assertEqual(kwargs["timeout"], 30)
             staged = Path(args[-1])
             self.assertFalse(staged.is_relative_to(settings.PRIVATE_MEDIA_ROOT))
             self.assertEqual(staged.stat().st_mode & 0o777, 0o600)

@@ -9,6 +9,8 @@ from django.core import mail
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from accounts.middleware import SESSION_STARTED_AT
 from accounts.models import LoginThrottle, User
@@ -231,6 +233,22 @@ class AccountWorkflowTests(TestCase):
         self.change_access(self.staff)
         self.client.logout()
         self.assertContains(self.client.get(link), "Reset link unavailable")
+
+    def test_recovery_token_cannot_be_used_with_another_account_identifier(self):
+        token = reset_tokens.make_token(self.staff)
+        url = reverse(
+            "accounts:password_reset_confirm",
+            kwargs={"uidb64": urlsafe_base64_encode(force_bytes(self.admin.pk)), "token": token},
+        )
+        self.assertContains(self.client.get(url), "Reset link unavailable")
+        self.assertContains(
+            self.client.post(url, {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}),
+            "Reset link unavailable",
+        )
+        for account in (self.admin, self.staff):
+            account.refresh_from_db()
+            self.assertTrue(account.check_password(PASSWORD))
+        self.assertFalse(AuditEvent.objects.filter(action="auth.password_reset").exists())
 
     def test_account_and_password_forms_require_csrf(self):
         browser = Client(enforce_csrf_checks=True)

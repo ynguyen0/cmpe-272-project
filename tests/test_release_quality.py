@@ -127,6 +127,25 @@ class ProtectedOperationTests(SeededTestCase):
                             self.assertNotContains(response, secret, status_code=404)
             self.assertEqual(self.business_state(), original)
 
+    def test_every_nested_record_rejects_a_child_from_another_accessible_case(self):
+        # Membership in both cases must not allow a child ID to be used under
+        # the wrong parent. Exercise every nested GET/POST route in the inventory.
+        beta = Case.objects.get(number="DEMO-BETA")
+        CaseMembership.objects.create(case=beta, user=self.actor)
+        self.client.force_login(self.actor)
+        original = self.business_state()
+        for name, (args, mutates) in self.routes.items():
+            if len(args) != 2:
+                continue
+            swapped = [beta.pk, args[1]]
+            for method in ("get", "post") if mutates else ("get",):
+                with self.subTest(route=name, method=method):
+                    response = getattr(self.client, method)(reverse(f"cases:{name}", args=swapped))
+                    self.assertEqual(response.status_code, 404)
+                    for secret in (self.document.title, self.task.title, self.deadline.title):
+                        self.assertNotContains(response, secret, status_code=404)
+        self.assertEqual(self.business_state(), original)
+
     def test_staff_cannot_invoke_role_restricted_operations_directly(self):
         self.client.force_login(self.staff)
         original = self.business_state()

@@ -28,6 +28,9 @@ def dump_database(snapshot, path):
         "PGPASSWORD": str(config["PASSWORD"]),
         "PGDATABASE": str(config["NAME"]),
         "PGSSLMODE": config["OPTIONS"]["sslmode"],
+        "PGCONNECT_TIMEOUT": str(config["OPTIONS"]["connect_timeout"]),
+        # Backup queries can legitimately exceed the interactive query limit.
+        "PGOPTIONS": "-c statement_timeout=120000 -c lock_timeout=3000",
     }
     subprocess.run(
         [
@@ -43,6 +46,7 @@ def dump_database(snapshot, path):
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        timeout=settings.DATABASE_BACKUP_TIMEOUT,
     )
     path.chmod(0o600)
 
@@ -93,7 +97,7 @@ class Command(BaseCommand):
                     dump_database(snapshot, staging / "database.dump")
                     archive_files(staging / "documents.tar")
                 staging.rename(target)
-        except (OSError, subprocess.CalledProcessError) as exc:
+        except (OSError, subprocess.SubprocessError) as exc:
             raise CommandError(
                 "Backup failed. Check PostgreSQL access and private file storage."
             ) from exc

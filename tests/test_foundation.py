@@ -127,6 +127,7 @@ class SettingsTests(SimpleTestCase):
             capture_output=True,
             text=True,
             check=False,
+            timeout=30,
         )
 
     def test_missing_required_secret_fails_without_echoing_secrets(self):
@@ -173,6 +174,7 @@ class SettingsTests(SimpleTestCase):
             capture_output=True,
             text=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 

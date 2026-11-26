@@ -170,3 +170,32 @@ Dependency audit, format/lint, Django checks, migration drift and the real recov
 drill passed. Q-008 is fixed locally with matching Linux-client reproduction
 verified; a new hosted run of the changed workflow is still required after
 publishing this fix. The failed hosted run is not marked as passed by local results.
+
+
+## Observability and timeout baseline — 2026-11-26
+
+Local working-tree validation for the operational baseline request:
+
+- **195 Django tests passed, no skips**, including new health/probe independence,
+  dashboard status counter and latency bucket checks, exception measurement,
+  request-ID propagation/context cleanup, JSON newline escaping and URL redaction,
+  real cross-process metric aggregation, backup-timeout cleanup, and live database
+  statement/lock timeout checks. Existing permissions, account, document, work,
+  audit, schema, migration round trip, and paired recovery tests also passed.
+- **10 Chromium workflows passed, no skips** after the middleware/logging changes.
+- `manage.py check`, `makemigrations --check --dry-run`, Ruff lint/format,
+  `git diff --check`, and local documentation link checks passed.
+- `uv run --locked pip-audit --timeout 15` reported no known vulnerabilities after
+  adding the locked Prometheus dependency.
+- A live Gunicorn server with two workers verified aggregated dashboard metrics,
+  HTTP health and metrics with an old cookie and no reachable database, unique
+  response request IDs, and valid JSON with request_id on all captured runtime
+  log lines, including Gunicorn startup and shutdown.
+
+Tests used generated-credential temporary PostgreSQL 16 clusters and isolated
+private files. Instances were stopped/removed afterward. The first new test run
+exposed a test-mock isolation error; the next exposed an invalid standalone
+multiprocess test request. Both fixtures were corrected before the passing run.
+No tests were skipped or removed. See [the operational guide](observability-and-slo.md)
+for SLI queries, the calculated error budget, timeout scope, and multiprocess setup.
+These results do not establish a production rollout or 30 days of SLO compliance.

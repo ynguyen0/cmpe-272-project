@@ -34,10 +34,11 @@ INSTALLED_APPS = [
     "audit",
 ]
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
     # Early, so every later response — including authentication failures and
     # permission denials — can be audited under one correlation ID.
     "audit.middleware.AuditCorrelationMiddleware",
+    "config.observability.RequestMetricsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -76,7 +77,11 @@ DATABASES = {
         "HOST": required("POSTGRES_HOST"),
         "PORT": os.environ.get("POSTGRES_PORT", "5432"),
         "CONN_MAX_AGE": 0,
-        "OPTIONS": {"sslmode": os.environ.get("POSTGRES_SSLMODE", "prefer")},
+        "OPTIONS": {
+            "sslmode": os.environ.get("POSTGRES_SSLMODE", "prefer"),
+            "connect_timeout": 5,
+            "options": "-c statement_timeout=10000 -c lock_timeout=3000",
+        },
         "TEST": {"NAME": os.environ.get("POSTGRES_TEST_DB", "test_lexflow")},
     }
 }
@@ -132,17 +137,26 @@ SESSION_ABSOLUTE_AGE = 8 * 60 * 60
 LOGIN_FAILURE_LIMIT = 5
 LOGIN_FAILURE_WINDOW = 15 * 60
 PASSWORD_RESET_TIMEOUT = 30 * 60
+EMAIL_TIMEOUT = 10
+DATABASE_BACKUP_TIMEOUT = 120
 X_FRAME_OPTIONS = "DENY"
 ALLOW_DEMO_DATA = False
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {
-        "redact_recovery": {"()": "config.logging.RedactRecoveryURL"},
-        "redact_request_query": {"()": "config.logging.RedactRequestQuery"},
+    "formatters": {"json": {"()": "config.logging.JSONFormatter"}},
+    "handlers": {
+        "json_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+        },
     },
+    "root": {"handlers": ["json_console"], "level": "INFO"},
     "loggers": {
-        name: {"filters": ["redact_recovery", "redact_request_query"]}
-        for name in ("django.server", "django.request", "django.security.csrf")
+        "django": {"handlers": [], "level": "INFO", "propagate": True},
+        # Completion logs above replace runserver's duplicate raw URL access log.
+        "django.server": {"handlers": [], "propagate": False},
+        "gunicorn.error": {"handlers": [], "level": "INFO", "propagate": True},
+        "gunicorn.access": {"handlers": [], "propagate": False},
     },
 }

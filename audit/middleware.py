@@ -39,7 +39,9 @@ class AuditCorrelationMiddleware:
         request.correlation_id = correlation_id
         token = set_correlation_id(correlation_id)
         try:
-            return self.get_response(request)
+            response = self.get_response(request)
+            response["X-Request-ID"] = str(correlation_id)
+            return response
         finally:
             # Always unbind: worker threads and ASGI tasks are reused between requests.
             reset_correlation_id(token)

@@ -53,5 +53,5 @@ jobs:
           uv run --locked playwright install --with-deps chromium
       - name: Generate ephemeral signing key
         run: python -c 'import secrets; print("DJANGO_SECRET_KEY=" + secrets.token_urlsafe(64))' >> "$GITHUB_ENV"
-      - name: Check migrations, style, Django tests, and browser workflows
+      - name: Audit dependencies and check migrations, style, and tests
         run: sh scripts/check.sh
