@@ -542,6 +542,6 @@ class GlobalSearchForm(StrictFields, forms.Form):
 
     q = forms.CharField(
         max_length=150,
-        label="Search Cases And Clients",
+        label="Search cases and clients",
         widget=forms.TextInput(attrs={"type": "search"}),
     )

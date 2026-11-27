@@ -16,6 +16,10 @@ class SignInWorkflowTests(StaticLiveServerTestCase):
             browser = playwright.chromium.launch()
             page = browser.new_page(viewport={"width": 390, "height": 844})
             page.goto(self.live_server_url)
+            expect(page.get_by_role("heading", name="A clear view of every case.")).to_be_visible()
+            page.get_by_role("navigation", name="Main navigation").get_by_role(
+                "link", name="Sign in", exact=True
+            ).click()
             page.get_by_label("Email", exact=True).fill("attorney.a@example.test")
             page.get_by_label("Password", exact=True).fill("wrong-password")
             page.get_by_role("button", name="Sign in", exact=True).click()
@@ -34,7 +38,7 @@ class SignInWorkflowTests(StaticLiveServerTestCase):
             )
             page.get_by_role("button", name="Sign out", exact=True).click()
             expect(page.get_by_role("heading", name="Sign in", exact=True)).to_be_visible()
-            page.goto(self.live_server_url)
+            page.goto(self.live_server_url + "/dashboard/")
             expect(page.get_by_role("heading", name="Sign in", exact=True)).to_be_visible()
             browser.close()
 
@@ -47,7 +51,7 @@ class ClientWorkflowTests(StaticLiveServerTestCase):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             page = browser.new_page(viewport={"width": 390, "height": 844})
-            page.goto(self.live_server_url)
+            page.goto(self.live_server_url + "/accounts/login/")
             page.get_by_label("Email", exact=True).fill("attorney.a@example.test")
             page.get_by_label("Password", exact=True).fill(password)
             page.get_by_role("button", name="Sign in", exact=True).click()
@@ -93,7 +97,7 @@ class CaseWorkflowTests(StaticLiveServerTestCase):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             page = browser.new_page(viewport={"width": 390, "height": 844})
-            page.goto(self.live_server_url)
+            page.goto(self.live_server_url + "/accounts/login/")
             page.get_by_label("Email", exact=True).fill("attorney.a@example.test")
             page.get_by_label("Password", exact=True).fill(password)
             page.get_by_role("button", name="Sign in", exact=True).click()
@@ -128,7 +132,7 @@ class DocumentWorkflowTests(StaticLiveServerTestCase):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             page = browser.new_page(viewport={"width": 390, "height": 844})
-            page.goto(self.live_server_url)
+            page.goto(self.live_server_url + "/accounts/login/")
             page.get_by_label("Email", exact=True).fill("attorney.a@example.test")
             page.get_by_label("Password", exact=True).fill(password)
             page.get_by_role("button", name="Sign in", exact=True).click()

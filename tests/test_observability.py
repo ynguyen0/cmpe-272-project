@@ -43,7 +43,7 @@ class ObservabilityTests(SimpleTestCase):
         return observability.REGISTRY.get_sample_value(metric, labels) or 0
 
     def test_dashboard_counter_and_histogram_include_errors_and_one_second_bucket(self):
-        request = RequestFactory().get("/")
+        request = RequestFactory().get("/dashboard/")
         for status in (200, 302, 500):
             with self.subTest(status=status):
                 labels = {"status": str(status)}
@@ -77,7 +77,8 @@ class ObservabilityTests(SimpleTestCase):
                 )
         before = self.sample("lexflow_dashboard_requests_total", status="200")
         middleware(RequestFactory().get("/health"))
-        middleware(RequestFactory().post("/"))
+        middleware(RequestFactory().get("/"))
+        middleware(RequestFactory().post("/dashboard/"))
         self.assertEqual(self.sample("lexflow_dashboard_requests_total", status="200"), before)
 
     def test_json_request_logs_share_response_id_and_reset_context(self):
@@ -88,7 +89,7 @@ class ObservabilityTests(SimpleTestCase):
         logger = logging.getLogger("lexflow.requests")
         logger.addHandler(handler)
         try:
-            first = self.client.get("/?q=confidential", HTTP_X_REQUEST_ID="forged")
+            first = self.client.get("/dashboard/?q=confidential", HTTP_X_REQUEST_ID="forged")
             second = self.client.get("/health")
         finally:
             logger.removeHandler(handler)
@@ -111,7 +112,7 @@ class ObservabilityTests(SimpleTestCase):
         before = self.sample("lexflow_dashboard_requests_total", status="500")
         middleware = AuditCorrelationMiddleware(observability.RequestMetricsMiddleware(failure))
         with self.assertRaises(RuntimeError):
-            middleware(RequestFactory().get("/"))
+            middleware(RequestFactory().get("/dashboard/"))
         self.assertEqual(self.sample("lexflow_dashboard_requests_total", status="500"), before + 1)
         self.assertEqual(correlation_id.get(), previous)
 

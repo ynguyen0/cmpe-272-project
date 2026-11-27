@@ -91,8 +91,8 @@ class DashboardSummaryTests(DashboardTestCase):
         response = self.client.get(self.url)
         self.assertEqual({card.count for card in self.cards(response).values()}, {0})
         self.assertEqual(response.context["activity"], [])
-        self.assertContains(response, "You Have No Open Cases.")
-        self.assertContains(response, "No Recent Activity In Your Cases.")
+        self.assertContains(response, "You have no open cases")
+        self.assertContains(response, "No recent activity in your cases")
         self.assertNotContains(response, self.alpha.title)
         self.assertNotContains(response, self.beta.title)
 
@@ -240,7 +240,7 @@ class GlobalSearchTests(DashboardTestCase):
         response = self.client.get(self.search, {"q": "Bulk"})
         clients = response.context["results"]["clients"]
         self.assertEqual((clients.count, len(clients.items)), (12, 10))
-        self.assertContains(response, "Showing 10 Of 12.")
+        self.assertContains(response, "Showing 10 of 12.")
 
     def test_rejects_blank_long_and_unexpected_input(self):
         self.client.force_login(self.attorney)

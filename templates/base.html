@@ -5,16 +5,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}LexFlow{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'lexflow/images/lexflow-mark.svg' %}">
   <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
-  <link rel="stylesheet" href="{% static 'lexflow/firm.css' %}?v=2">
+  <link rel="stylesheet" href="{% static 'lexflow/firm.css' %}?v=4">
+  {% block extra_head %}{% endblock %}
 </head>
 <body class="{% if user.is_authenticated %}firm-workspace{% else %}firm-guest{% endif %} {% block body_class %}{% endblock %}">
   <a href="#main" class="skip-link visually-hidden-focusable">Skip to content</a>
-  <header class="firm-header">
+  {% block header %}<header class="firm-header">
     {% with route=request.resolver_match.url_name namespace=request.resolver_match.namespace %}
       <nav class="navbar firm-nav" aria-label="Main navigation">
-        <a class="firm-brand" href="{% url 'cases:dashboard' %}">
-          <span class="firm-mark" aria-hidden="true">L</span>
+        <a class="firm-brand" href="{% if user.is_authenticated %}{% url 'cases:dashboard' %}{% else %}{% url 'home' %}{% endif %}">
+          <img class="firm-logo" src="{% static 'lexflow/images/lexflow-mark.svg' %}" width="36" height="36" alt="">
           <span>LexFlow</span>
         </a>
         {% if user.is_authenticated %}
@@ -43,7 +45,7 @@
         {% endif %}
       </nav>
     {% endwith %}
-  </header>
+  </header>{% endblock %}
   <main id="main" class="firm-main" tabindex="-1">
     {% for message in messages %}<div class="alert alert-success" role="status">{{ message }}</div>{% endfor %}
     {% block content %}{% endblock %}
