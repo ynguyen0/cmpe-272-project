@@ -26,7 +26,7 @@ class ReleaseWorkflowTests(StaticLiveServerTestCase):
             call_command("seed_demo", stdout=StringIO())
 
     def sign_in(self, page, email):
-        page.goto(self.live_server_url)
+        page.goto(self.live_server_url + "/accounts/login/")
         page.get_by_label("Email", exact=True).fill(email)
         # Exercise sequential keyboard focus and submit without using a mouse.
         page.get_by_label("Email", exact=True).focus()

@@ -60,7 +60,7 @@ class RequestMetricsMiddleware:
             return response
         finally:
             duration = max(0, perf_counter() - started)
-            if request.path_info == "/" and request.method == "GET":
+            if request.path_info == "/dashboard/" and request.method == "GET":
                 REQUESTS.labels(status=str(status)).inc()
                 LATENCY.labels(status=str(status)).observe(duration)
             match = getattr(request, "resolver_match", None)

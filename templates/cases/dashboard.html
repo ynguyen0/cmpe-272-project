@@ -6,16 +6,16 @@
     <h1>Dashboard</h1>
     {% if can_create or can_view_audit or user.is_administrator %}
       <div class="page-actions">
-        {% if user.is_administrator %}<a href="{% url 'accounts:list' %}">Manage Accounts</a>{% endif %}
-        {% if can_view_audit %}<a href="{% url 'cases:audit' %}">Audit Records</a>{% endif %}
+        {% if user.is_administrator %}<a href="{% url 'accounts:list' %}">Manage accounts</a>{% endif %}
+        {% if can_view_audit %}<a href="{% url 'cases:audit' %}">Audit records</a>{% endif %}
         {% if can_create %}
-          <a href="{% url 'cases:client_create' %}">Create Client</a>
-          <a class="btn btn-primary" href="{% url 'cases:create' %}"><span aria-hidden="true">+</span> Create Case</a>
+          <a href="{% url 'cases:client_create' %}">Create client</a>
+          <a class="btn btn-primary" href="{% url 'cases:create' %}"><span aria-hidden="true">+</span> Create case</a>
         {% endif %}
       </div>
     {% endif %}
   </div>
-  <dl class="case-totals dash-totals" aria-label="Work Summary">
+  <dl class="case-totals dash-totals" aria-label="Work summary">
     {% for card in cards %}
       <div><dt><a href="{{ card.url }}">{{ card.label }}</a></dt><dd>{{ card.count }}</dd></div>
     {% endfor %}
@@ -27,7 +27,7 @@
   <form method="get" action="{% url 'cases:search' %}" class="record-filters dash-search-form" role="search">
     <div>{{ search_form.q.label_tag }} {{ search_form.q }}</div>
     <button type="submit" class="btn btn-secondary">Search</button>
-    <div class="form-text">Search By Case Reference, Title, Or Docket Number, Or By Client Name, ID, Email, Or Phone.</div>
+    <div class="form-text">Search by case reference, title, or docket number, or by client name, ID, email, or phone</div>
   </form>
 </section>
 
@@ -36,7 +36,7 @@
     <section class="register-sheet" aria-labelledby="card-{{ card.key }}">
       <div class="register-heading">
         <h2 id="card-{{ card.key }}">{{ card.title }}</h2>
-        <p>{{ card.count }} Result{{ card.count|pluralize }} · <a href="{{ card.url }}">View All</a></p>
+        <p>{{ card.count }} result{{ card.count|pluralize }} · <a href="{{ card.url }}">View all</a></p>
       </div>
       <div class="table-responsive">
         <table class="table record-table case-table">
@@ -72,12 +72,12 @@
 
   <section class="register-sheet" aria-labelledby="card-activity">
     <div class="register-heading">
-      <h2 id="card-activity">Recent Activity</h2>
-      <p>Latest Changes In Your Cases</p>
+      <h2 id="card-activity">Recent activity</h2>
+      <p>Latest changes in your cases</p>
     </div>
     <div class="table-responsive">
       <table class="table record-table case-table">
-        <caption class="visually-hidden">Recent Activity</caption>
+        <caption class="visually-hidden">Recent activity</caption>
         <thead><tr><th scope="col">Reference</th><th scope="col">Record</th><th scope="col">Updated</th></tr></thead>
         <tbody>
         {% for row in activity %}
@@ -87,7 +87,7 @@
             <td class="record-date">{{ row.when|date:"Y-m-d H:i" }}</td>
           </tr>
         {% empty %}
-          <tr><td class="record-empty" colspan="3">No Recent Activity In Your Cases.</td></tr>
+          <tr><td class="record-empty" colspan="3">No recent activity in your cases</td></tr>
         {% endfor %}
         </tbody>
       </table>

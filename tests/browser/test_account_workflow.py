@@ -17,7 +17,7 @@ class AccountBrowserTests(StaticLiveServerTestCase):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             admin = browser.new_page()
-            admin.goto(self.live_server_url)
+            admin.goto(self.live_server_url + "/accounts/login/")
             admin.get_by_label("Email", exact=True).fill("admin@example.test")
             admin.get_by_label("Password", exact=True).fill(password)
             admin.get_by_role("button", name="Sign in", exact=True).click()
@@ -32,7 +32,7 @@ class AccountBrowserTests(StaticLiveServerTestCase):
             expect(admin.get_by_role("row", name=re.compile(email))).to_contain_text("Active")
 
             colleague = browser.new_page()
-            colleague.goto(self.live_server_url)
+            colleague.goto(self.live_server_url + "/accounts/login/")
             colleague.get_by_role("link", name="Forgot your password?").click()
             colleague.get_by_label("Email").fill(email)
             colleague.get_by_role("button", name="Send reset link").click()

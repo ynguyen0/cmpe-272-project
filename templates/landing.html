@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}LexFlow · A clear view of every case{% endblock %}
+{% block body_class %}landing-page{% endblock %}
+{% block extra_head %}
+  <meta name="description" content="Keep your law firm's cases, clients, documents, tasks, and deadlines connected in LexFlow.">
+  <link rel="stylesheet" href="{% static 'lexflow/landing.css' %}">
+{% endblock %}
+{% block header %}
+<header class="landing-header">
+  <nav class="landing-nav" aria-label="Main navigation">
+    <a class="firm-brand" href="{% url 'home' %}">
+      <img class="firm-logo" src="{% static 'lexflow/images/lexflow-mark.svg' %}" width="36" height="36" alt="">
+      <span>LexFlow</span>
+    </a>
+    <div class="landing-links">
+      <a href="#workspace">The workspace</a>
+      <a href="#practice">How it fits</a>
+    </div>
+    <a class="landing-button landing-button-primary" href="{% url 'accounts:login' %}">Sign in</a>
+  </nav>
+</header>
+{% endblock %}
+{% block content %}
+<section class="landing-hero" aria-labelledby="hero-title">
+  <div class="hero-copy">
+    <p class="landing-eyebrow">Case management for law firms</p>
+    <h1 id="hero-title">A clear view of<br>every case.</h1>
+    <p class="hero-description">Your cases, clients, documents, and deadlines, connected. Spend less time piecing things together and more time moving your matters forward.</p>
+    <div class="hero-actions">
+      <a class="landing-button landing-button-primary" href="{% url 'accounts:login' %}">Open your workspace</a>
+      <a class="landing-text-link" href="#workspace">Explore LexFlow</a>
+    </div>
+    <p class="hero-note">Already have an account? Sign in with your firm email.</p>
+  </div>
+  <div class="hero-art">
+    <img src="{% static 'lexflow/images/on-the-laptop.png' %}" width="846" height="802" alt="Illustration of a person working at a laptop" fetchpriority="high">
+  </div>
+</section>
+
+<section id="workspace" class="landing-workspace" aria-labelledby="workspace-title">
+  <div class="landing-section-heading">
+    <div>
+      <p class="landing-eyebrow">One connected workspace</p>
+      <h2 id="workspace-title">The matter. The details.<br>The next step.</h2>
+    </div>
+    <p>Start with the case. Find its clients, documents, assigned tasks, and deadlines together, with a dashboard for the work that needs your attention.</p>
+  </div>
+  <div class="workspace-example" aria-label="Illustrative case workspace">
+    <div class="example-heading">
+      <span class="example-title">Case records</span>
+      <span class="example-caption">Illustrative workspace · fictional records</span>
+    </div>
+    <div class="example-table-wrap">
+      <table class="example-table" role="table">
+        <caption class="visually-hidden">Fictional case records showing how LexFlow organizes matters</caption>
+        <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Reference</th><th scope="col" role="columnheader">Matter</th><th scope="col" role="columnheader">Type</th><th scope="col" role="columnheader">Status</th></tr></thead>
+        <tbody role="rowgroup">
+          <tr role="row"><td class="example-ref" role="cell">DEMO-ALPHA</td><td role="cell">Fictional Alpha matter</td><td role="cell">Civil</td><td role="cell"><span class="record-status" data-status="In progress">In progress</span></td></tr>
+          <tr role="row"><td class="example-ref" role="cell">DEMO-BETA</td><td role="cell">Fictional Beta matter</td><td role="cell">Civil</td><td role="cell"><span class="record-status" data-status="On hold">On hold</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="example-footer"><span>Clients</span><span>Documents</span><span>Tasks</span><span>Deadlines</span></div>
+  </div>
+  <div class="workspace-notes">
+    <div><h3>Find the right record</h3><p>Search cases and clients by the details you have, from a case reference to a client’s name.</p></div>
+    <div><h3>Know what’s coming</h3><p>See overdue work and the next seven days of tasks and deadlines from your dashboard.</p></div>
+    <div><h3>Keep the context</h3><p>Keep documents and client links with the case, so the next step starts with the right information.</p></div>
+  </div>
+</section>
+
+<section id="practice" class="landing-practice" aria-labelledby="practice-title">
+  <div class="practice-art"><img src="{% static 'lexflow/images/project-development.png' %}" width="596" height="502" alt="Illustration of hands working on a project plan" loading="lazy"></div>
+  <div class="practice-copy">
+    <p class="landing-eyebrow">Built around the work</p>
+    <h2 id="practice-title">Individual responsibilities.<br>A shared case history.</h2>
+    <p>Attorneys and staff work from the same case records, with access tied to their case memberships and permissions.</p>
+    <ul class="practice-list">
+      <li>Assigned tasks and responsible team members</li>
+      <li>Case documents with private downloads</li>
+      <li>Recorded changes and case activity</li>
+    </ul>
+    <a class="landing-text-link" href="{% url 'accounts:login' %}">Sign in to your firm’s workspace</a>
+  </div>
+</section>
+
+<section class="landing-close" aria-labelledby="close-title">
+  <div><p class="landing-eyebrow">Your next step</p><h2 id="close-title">Pick up where your work is.</h2></div>
+  <a class="landing-button landing-button-primary" href="{% url 'accounts:login' %}">Open your workspace</a>
+</section>
+<footer class="landing-footer">
+  <a class="firm-brand" href="{% url 'home' %}"><img class="firm-logo" src="{% static 'lexflow/images/lexflow-mark.svg' %}" width="36" height="36" alt=""><span>LexFlow</span></a>
+  <p>Cases connected. Work in order.</p>
+  <a href="{% url 'accounts:login' %}">Sign in</a>
+</footer>
+{% endblock %}

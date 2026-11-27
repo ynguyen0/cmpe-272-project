@@ -12,7 +12,7 @@ claim that a production service has met the target for 30 days.
   search terms, or request IDs in labels. Both endpoints are public read-only
   operational endpoints; the deployment proxy should limit metrics scraping to
   the monitoring network. Neither endpoint loads the session database.
-- `lexflow_dashboard_requests_total{status="200"}` counts completed **GET `/`**
+- `lexflow_dashboard_requests_total{status="200"}` counts completed **GET `/dashboard/`**
   requests, including failures and redirects under their actual status codes.
 - `lexflow_dashboard_request_duration_seconds{status="200"}` records server
   wall-clock time in cumulative histogram buckets, plus `_count` and `_sum`.
@@ -72,11 +72,12 @@ runner progress are CLI output, not structured runtime log records.
 
 ## One SLO: open the dashboard entry point
 
-**Demo journey:** open `/`; a signed-in user sees the personal dashboard, while an
-anonymous user is directed to sign-in. Authentication and case scoping remain
+**Demo journey:** open `/` for the public landing page; signed-in visitors are
+redirected to `/dashboard/`. Opening `/dashboard/` anonymously directs the visitor
+to sign-in. Authentication and case scoping remain
 covered by functional/security tests.
 
-**Objective:** over a rolling **30-day** window, **99.9% of completed GET `/`
+**Objective:** over a rolling **30-day** window, **99.9% of completed GET `/dashboard/`
 requests** return HTTP **200 or the expected 302 sign-in redirect** in **at most
 1.0 second** of server time. A slow response or any other status is a bad event;
 a response that is both slow and erroneous is counted only once. All traffic in

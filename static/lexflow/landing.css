@@ -1,0 +1,85 @@
+.landing-page { background: #fff; font-size: 1rem; }
+.landing-page .firm-main { max-width: 80rem; padding: 0 2rem; }
+.landing-page .firm-brand { color: var(--deep-space-blue); }
+.landing-page .firm-logo { filter: none; }
+.landing-header { border-bottom: 1px solid var(--rule); }
+.landing-nav { display: flex; align-items: center; justify-content: space-between; gap: 2rem; max-width: 80rem; min-height: 5rem; padding: 1rem 2rem; margin: auto; }
+.landing-links { display: flex; gap: 2rem; margin-left: auto; }
+.landing-links a, .landing-footer > a:last-child { color: var(--text-secondary); font-size: .875rem; text-decoration: none; }
+.landing-links a:hover, .landing-footer > a:last-child:hover { color: var(--deep-space-blue); text-decoration: underline; }
+.landing-button { display: inline-flex; align-items: center; justify-content: center; min-height: 3rem; padding: .75rem 1.5rem; border: 1px solid transparent; border-radius: .5rem; font-size: .9375rem; font-weight: 500; text-decoration: none; }
+.landing-button-primary { background: #234b75; color: #fff; }
+.landing-button-primary:hover { background: var(--deep-space-blue); color: #fff; }
+.landing-nav .landing-button { min-height: 2.75rem; padding: .5rem 1.25rem; }
+.landing-hero { display: grid; grid-template-columns: 1.05fr 1fr; align-items: center; gap: 3rem; padding: 5rem 0 4rem; }
+.landing-eyebrow { color: #234b75; font-size: .875rem; font-weight: 500; margin: 0 0 1.5rem; }
+.landing-page .hero-copy h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(3rem, 5vw, 4.5rem); font-weight: 400; line-height: 1.08; letter-spacing: -.03em; margin: 0 0 1.5rem; }
+.hero-description { max-width: 30rem; color: var(--text-secondary); font-size: 1.125rem; line-height: 1.7; margin: 0 0 2rem; }
+.hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.5rem; }
+.landing-text-link { color: #234b75; font-weight: 500; text-underline-offset: .3em; }
+.hero-note { color: var(--text-muted); font-size: .875rem; margin: 1.5rem 0 0; }
+.hero-art { padding: 1.5rem; }
+.hero-art img { display: block; width: 100%; height: auto; max-height: 26rem; object-fit: contain; }
+.landing-workspace { padding: 4rem 0; border-top: 1px solid var(--rule); scroll-margin-top: 2rem; }
+.landing-section-heading { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 4rem; margin-bottom: 2.5rem; }
+.landing-page h2 { font-family: Georgia, "Times New Roman", serif; font-size: 2.5rem; font-weight: 400; line-height: 1.2; margin: 0; }
+.landing-section-heading > p, .practice-copy > p:not(.landing-eyebrow) { color: var(--text-secondary); line-height: 1.8; margin: 0; max-width: 30rem; }
+.workspace-example { overflow: hidden; border: 1px solid var(--rule); border-radius: .75rem; box-shadow: 0 8px 24px rgb(13 19 33 / 4%); }
+.example-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding: 1.5rem; }
+.example-title { font-size: 1.125rem; font-weight: 500; }
+.example-caption { font-size: .875rem; color: var(--text-muted); }
+.example-table-wrap { overflow-x: auto; }
+.example-table { width: 100%; border-collapse: collapse; }
+.example-table th { background: var(--surface-quiet); font-weight: 500; color: var(--text-secondary); font-size: .875rem; }
+.example-table :is(th, td) { padding: 1.25rem 1.5rem; border-top: 1px solid var(--rule); text-align: left; }
+.example-ref { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; color: #234b75; font-size: .875rem; white-space: nowrap; }
+.example-table .record-status { font-size: .875rem; }
+.example-footer { display: flex; flex-wrap: wrap; gap: 2rem; padding: 1.25rem 1.5rem; border-top: 1px solid var(--rule); color: var(--text-secondary); font-size: .875rem; }
+.workspace-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3rem; margin-top: 2.5rem; }
+.landing-page .workspace-notes h3 { font-size: 1rem; font-weight: 500; margin-bottom: .75rem; }
+.workspace-notes p { color: var(--text-secondary); line-height: 1.75; margin: 0; }
+.landing-practice { display: grid; grid-template-columns: 1fr 1.1fr; gap: 5rem; align-items: center; padding: 4rem 0 5rem; border-top: 1px solid var(--rule); scroll-margin-top: 2rem; }
+.practice-art img { display: block; width: 100%; height: auto; }
+.practice-copy h2 { margin-bottom: 1.5rem; }
+.practice-list { margin: 1.5rem 0 2rem; padding: 0; list-style: none; }
+.practice-list li { padding: .75rem 0; border-bottom: 1px solid var(--rule); color: var(--text-secondary); }
+.landing-close { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2rem; padding: 3rem; border-radius: 1rem; background: #f3f6f9; }
+.landing-close .landing-eyebrow { margin-bottom: 1rem; }
+.landing-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; padding: 2.5rem 0; margin-top: 3rem; border-top: 1px solid var(--rule); }
+.landing-footer p { color: var(--text-muted); font-size: .875rem; margin: 0; }
+@media (max-width: 960px) {
+  .landing-hero { gap: 2rem; padding-top: 4rem; }
+  .landing-section-heading { gap: 2rem; }
+  .landing-practice { gap: 2rem; }
+  .workspace-notes { gap: 1.5rem; }
+}
+@media (max-width: 700px) {
+  .landing-page .firm-main { padding-inline: 1.5rem; }
+  .landing-nav { padding-inline: 1.5rem; gap: 1rem; }
+  .landing-links { display: none; }
+  .landing-hero, .landing-section-heading, .landing-practice { grid-template-columns: 1fr; }
+  .landing-hero { padding: 3rem 0; gap: 2.5rem; }
+  .landing-page .hero-copy h1 { font-size: 3rem; }
+  .hero-description { font-size: 1rem; }
+  .hero-art img { max-height: 22rem; }
+  .landing-section-heading { gap: 1.5rem; }
+  .landing-page h2 { font-size: 2rem; }
+  .landing-workspace, .landing-practice { padding-block: 3rem; }
+  .example-table, .example-table tbody { display: block; }
+  .example-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .example-table tbody tr { display: grid; grid-template-columns: 1fr auto; gap: .5rem 1rem; align-items: center; border-top: 1px solid var(--rule); padding: 1rem; }
+  .example-table td { border: 0; padding: 0; }
+  .example-table td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .example-table td:nth-child(3) { grid-column: 1 / -1; color: var(--text-muted); font-size: .875rem; }
+  .example-table td:nth-child(4) { grid-column: 2; grid-row: 1; }
+  .example-footer { gap: 1rem; padding: 1rem; }
+  .workspace-notes { grid-template-columns: 1fr; gap: 1.5rem; margin-top: 2rem; }
+  .practice-art { max-width: 24rem; margin-inline: auto; }
+  .landing-close { padding: 2rem; }
+  .landing-footer { margin-top: 2rem; padding-block: 2rem; }
+}
+@media (max-width: 360px) {
+  .landing-page .firm-main, .landing-nav { padding-inline: 1rem; }
+  .landing-page .hero-copy h1 { font-size: 2.75rem; }
+  .landing-close { padding: 1.5rem; }
+}
