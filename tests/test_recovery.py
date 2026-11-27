@@ -39,6 +39,8 @@ class RecoveryTests(TransactionTestCase):
             "sslmode": config["OPTIONS"]["sslmode"],
             "dbname": "postgres",
             "autocommit": True,
+            "connect_timeout": 5,
+            "options": "-c statement_timeout=120000 -c lock_timeout=3000",
         }
         env = {
             **os.environ,
@@ -81,6 +83,7 @@ class RecoveryTests(TransactionTestCase):
                         check=False,
                         capture_output=True,
                         text=True,
+                        timeout=120,
                     )
                     self.assertEqual(
                         restore.returncode,
@@ -132,6 +135,7 @@ print("Restored active/archived byte equality, relationships, and download permi
                         check=False,
                         capture_output=True,
                         text=True,
+                        timeout=60,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn("download permissions passed", result.stdout)

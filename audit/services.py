@@ -30,15 +30,12 @@ See ``docs/permissions-and-audit.md`` for the full usage note.
 
 import re
 import uuid
-from contextvars import ContextVar
 
 from django.db import transaction
 
-from .models import AuditEvent
+from config.request_context import correlation_id as _correlation_id
 
-# One correlation ID per request so every event from a single request groups together.
-# A ContextVar (not a thread local) stays correct under both WSGI threads and ASGI tasks.
-_correlation_id: ContextVar[uuid.UUID | None] = ContextVar("lexflow_correlation_id", default=None)
+from .models import AuditEvent
 
 # Actions read as "<resource>.<verb>", lowercase, so LOG-02 can filter on exact strings.
 ACTION_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")

@@ -6,6 +6,9 @@ See the [architecture](docs/architecture.md), [release backlog](docs/release-1-b
 and [team workflow/definition of done](CONTRIBUTING.md).
 Current [test results, defects, and presentation blockers](docs/test-results.md)
 are linked to the release requirements.
+The [observability and SLO guide](docs/observability-and-slo.md) documents `/health`,
+dashboard request/latency metrics at `/metrics`, JSON request logging, outgoing-call
+timeouts, and the demo journey's error budget.
 The [database design and ER diagram](docs/database-design.md) define the fields,
 protected relationships, constraints, indexes, archive rules, and migration strategy.
 
@@ -203,7 +206,7 @@ Then run:
 uv run python manage.py check --deploy --settings=config.settings.deployment --fail-level WARNING
 uv run python manage.py migrate --settings=config.settings.deployment
 uv run python manage.py collectstatic --noinput --settings=config.settings.deployment
-uv run gunicorn config.wsgi:application --bind 127.0.0.1:8000
+uv run gunicorn config.wsgi:application --config python:config.gunicorn --bind 127.0.0.1:8000
 ```
 
 For the worker command explicitly set `DJANGO_SETTINGS_MODULE=config.settings.deployment`

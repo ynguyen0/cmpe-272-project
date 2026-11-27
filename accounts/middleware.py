@@ -23,6 +23,10 @@ class AccountSessionMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # Public probes stay independent of the session database even when a
+        # browser sends an old session cookie.
+        if request.path_info in {"/health", "/metrics"}:
+            return self.get_response(request)
         if SESSION_KEY in request.session:
             user = request.user
             timestamp = int(now().timestamp())

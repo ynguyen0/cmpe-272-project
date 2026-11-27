@@ -8,6 +8,7 @@ from unittest.mock import patch
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.db.models import Max
+from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
@@ -229,7 +230,7 @@ class CorrelationIdTests(TestCase):
                 resource_id=7,
                 result=AuditEvent.Result.DENIED,
             )
-            return "response"
+            return HttpResponse("response")
 
         middleware = AuditCorrelationMiddleware(view)
         middleware(factory.get("/"))
@@ -246,7 +247,7 @@ class CorrelationIdTests(TestCase):
                 resource_type=Resource.USER,
                 result=AuditEvent.Result.SUCCESS,
             )
-            return "response"
+            return HttpResponse("response")
 
         middleware = AuditCorrelationMiddleware(view)
         middleware(factory.get("/"))

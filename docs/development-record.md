@@ -173,3 +173,68 @@ passing, no skips, no known dependency vulnerabilities, and clean format/lint/
 system/migration checks. Matching Linux version 16.13 clients also restored with
 exit 0 in the isolated reproduction. Hosted confirmation remains pending commit
 and push of this workflow change.
+
+
+## Security baseline verification — 2026-11-26
+
+Owner: Codex for ynguyen0. Requirements: GitHub #26, ACCESS-01, AUTH-02, DEL-01/02.
+Verified live secret scanning, push protection, Dependabot alerts/security updates,
+zero open security alerts, and an empty GitHub Actions secrets/environment inventory.
+The existing locked `pip-audit` gate passes and a controlled failure-injection
+check confirms audit failures stop the shared CI script. Main had no protection;
+enabled and read back required GitHub Actions `checks`, strict up-to-date checking,
+one approving review with stale-review dismissal, resolved conversations, administrator
+enforcement, and no force push/deletion. Updated CONTRIBUTING to match live settings.
+
+Existing record authorization checks were intact. Added route-inventory-driven
+parent/child mismatch coverage with membership in both cases, plus a password
+recovery token/account-ID mismatch regression. All 186 Django tests passed, no
+skips, in an isolated temporary PostgreSQL 16 cluster; lint/format/diff checks and
+the real vulnerability audit passed. The cluster was stopped and removed afterward.
+No development data was used; Chromium and hosted CI were not rerun.
+
+[Security baseline evidence and remaining actions](security-baseline.md) distinguish
+implemented controls from unavailable settings. There is no cloud deployment/key in
+current GitHub CI, so an OIDC migration is not applicable to that workflow; external
+Jenkins credentials remain unverified. Team MFA is not complete: this personal-account
+repository has no organization MFA enforcement setting, collaborator enrollment is
+unverified, and the cloud account/identity system is unspecified. No repository
+transfer, collaborator removal, external message, issue checklist edit, commit, or
+push was performed. Issue #26 must remain open pending MFA evidence.
+
+
+## Observability, demo SLO, and outgoing-call deadlines — 2026-11-26
+
+Owner: Codex. Requirements: requested operational baseline; LOG-01, DASH-01,
+DEL-01/02. Added public, dependency-free `/health` and Prometheus `/metrics`;
+stateless probes skip session lookup even with an old cookie. Instrumented GET `/`
+with a status-labelled request counter and latency histogram including a one-second
+bucket. Added shared-worker aggregation and a Gunicorn configuration; pinned the
+resolved Prometheus client in the lockfile. Existing authorization policies remain
+in force for business routes.
+
+Console logging now uses one JSON object per line with the existing audit
+correlation ID, returned as `X-Request-ID`. Correlation wraps security redirects
+and resets on errors. Completion logs use route names, and diagnostics retain
+query/recovery-token redaction without request bodies or exception values.
+Nonrequest records carry the request_id field with a context ID or `-`.
+
+Added PostgreSQL connect/query/lock deadlines, shared SMTP timeout, backup process
+and connection deadlines with cleanup on expiry, explicit advisory-service timeout,
+and finite recovery/settings-check test subprocess limits. The existing ClamAV
+30-second deadline is retained and tested.
+
+The [observability/SLO guide](observability-and-slo.md) defines one dashboard entry
+SLO: 99.9% of completed GET `/` requests return 200 or the expected sign-in 302
+within one second over 30 days. Computed budget: 0.1%, or 100 bad events per
+100,000 requests. The 43-minute-12-second time equivalent is illustrative, not
+the actual request-based allowance or observed uptime.
+
+Validation: 195 Django tests and 10 Chromium workflows passed with no skips, using
+temporary PostgreSQL 16 clusters and isolated private media. System/migration-drift,
+Ruff lint/format and diff checks passed; locked pip-audit found no known
+vulnerabilities. A real two-worker Gunicorn smoke test verified health/metrics
+without a reachable database, stale-cookie independence, unique response IDs,
+aggregated counters/histograms, and JSON with request_id on every captured runtime
+log line. Temporary instances were stopped and removed. No hosted CI, production
+rollout, 30-day SLO attainment, commit, or push is claimed.

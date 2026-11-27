@@ -7,10 +7,13 @@ At least **one other team member** reviews each PR, including tests, permissions
 migrations, setup instructions, and requirement coverage. Resolve review comments
 before merging. This is the team policy effective with this scaffold.
 
-Repository administrators should enforce that policy through GitHub branch protection
-or a ruleset: require a PR, one approving review, dismiss stale approvals, resolve review
-threads, and require `CI / checks` (select the exact reported check name after the first
-run). Remote protection is not enabled by these files; verify it in repository settings.
+Verified and enabled on 2026-11-26: `main` branch protection requires a PR, one
+approving review, dismissal of stale approvals, resolved review threads, and an
+up-to-date branch with the `checks` status from GitHub Actions (app ID 15368).
+Protection also applies to administrators; force pushes and branch deletion are
+disabled. These settings live on GitHub, not in these files; reverify after repository
+administration changes. See the [security baseline evidence](docs/security-baseline.md)
+for scanning, dependency gates, authorization coverage, and outstanding MFA work.
 Do not claim a local check as a GitHub CI run. No specific reviewers are hardcoded
 because team GitHub handles/ownership have not been confirmed.
 
